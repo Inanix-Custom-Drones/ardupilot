@@ -276,14 +276,14 @@ bool ModeThrow::throw_detected()
     bool no_throw_action = copter.ins.get_accel().length() < 1.0f * GRAVITY_MSS;
 
 
-    bool possible_throw_detected;
-    switch ((int) g2.throw_type) {
-    case (int) ThrowType::Frisbee :
+    bool possible_throw_detected = false;
+    switch ((ThrowType) g2.throw_type) {
+    case ThrowType::Frisbee :
         // rotation speed and increasing height indicate a possible throw release
         possible_throw_detected = (frisbee_throw && no_throw_action && changing_height);
         break;
-    case (int) ThrowType::Upward:
-    case (int) ThrowType::Drop:
+    case ThrowType::Upward:
+    case ThrowType::Drop:
         // High velocity or free-fall combined with increasing height indicate a possible air-drop or throw release
         possible_throw_detected = ((free_falling || high_speed) && changing_height && no_throw_action);
         break;

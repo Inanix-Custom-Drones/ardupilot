@@ -1599,7 +1599,7 @@ public:
     enum class ThrowType {
         Upward = 0,
         Drop = 1,
-        Frisbee = 2
+        Frisbee = 2,
     };
 
     enum class PreThrowMotorState {
