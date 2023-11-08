@@ -66,6 +66,7 @@ class BoardList(object):
             Board("navio2"),
             Board("edge"),
             Board("obal"),
+            Board("obal_gs"),
             Board("pxf"),
             Board("bbbmini"),
             Board("blue"),

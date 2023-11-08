@@ -324,6 +324,19 @@
     #define HAL_BUZZER_PIN                12 // You can choose between 27,22,4,12
     #define OBAL_ALLOW_ADC                1
 
+#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_GS
+	#define HAL_BOARD_LOG_DIRECTORY "/home/pi/ardupilot/logs"
+        #define HAL_BOARD_TERRAIN_DIRECTORY "/home/pi/ardupilot/terrain"
+        #define HAL_BOARD_STORAGE_DIRECTORY "/home/pi/ardupilot"
+        #define HAL_PARAM_DEFAULTS_PATH "/home/pi/ardupilot.parm"
+
+//	#define HAL_BARO_ALLOW_INIT_NO_BARO
+	#define HAL_INS_PROBE_LIST PROBE_IMU_I2C(Invensense,1,0x68,ROTATION_NONE)
+	#define HAL_MAG_PROBE_LIST PROBE_MAG_IMU_I2C(AK8963, mpu9250, 1, 0x0c, ROTATION_NONE)
+	#define HAL_BARO_PROBE_LIST PROBE_BARO_I2C(BMP280,1,0x76)
+	
+
+
 #else
     #error "no Linux board subtype set"
 #endif
