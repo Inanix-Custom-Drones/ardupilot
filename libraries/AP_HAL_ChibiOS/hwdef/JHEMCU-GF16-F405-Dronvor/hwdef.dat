@@ -1,0 +1,22 @@
+# hw definition file for processing by chibios_pins.py
+# Based onf JHEMCU GF16 by V-22
+# Made by Inanix
+
+define DRONVOR 1
+
+define CHIBIOS_SHORT_BOARD_NAME "GF16F405Dronvor"
+
+include ../JHEMCU-GF16-F405/hwdef_pindef.dat
+
+define PRECISION_LANDING        1
+define OSD_ENABLED              0
+define HAL_WITH_MSP_DISPLAYPORT 0
+define BUTTON_ENABLED           0
+define MODE_ZIGZAG_ENABLED      0
+define MODE_SYSTEMID_ENABLED    0
+define AUTOTUNE_ENABLED         0
+define CAMERA                   1
+define AC_RALLY                 0
+define AC_TERRAIN               0
+define BEACON_ENABLED           0
+define RPM_ENABLED              0
