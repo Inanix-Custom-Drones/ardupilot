@@ -6,7 +6,7 @@ define DRONVOR 1
 
 define CHIBIOS_SHORT_BOARD_NAME "GF16F405Dronvor"
 
-include ../JHEMCU-GF16-F405/hwdef_pindef.dat
+include ../JHEMCU-GF16-F405/hwdef.dat
 
 define PRECISION_LANDING        1
 define OSD_ENABLED              0
