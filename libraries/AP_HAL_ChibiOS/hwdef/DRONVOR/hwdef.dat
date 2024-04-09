@@ -1,0 +1,9 @@
+include ../JHEM_JHEF405/hwdef.dat
+
+# Dronvor special includes
+undef HAL_MOUNT_ENABLED
+undef AC_NAV_GUIDED
+undef HAL_DSHOT_ENABLED
+define HAL_MOUNT_ENABLED 1
+define AC_NAV_GUIDED 1
+define HAL_DSHOT_ENABLED 1
