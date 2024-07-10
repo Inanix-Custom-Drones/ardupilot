@@ -1,0 +1,58 @@
+# hw definition file for processing by chibios_pins.py
+# for Matek H743-WING
+
+# MCU class and specific type
+MCU STM32H7xx STM32H743xx
+
+# board ID for firmware load
+APJ_BOARD_ID 1013
+
+# crystal frequency, setup to use external oscillator
+OSCILLATOR_HZ 8000000
+
+FLASH_SIZE_KB 2048
+
+# bootloader takes first sector
+FLASH_RESERVE_START_KB 128
+
+
+# ChibiOS system timer
+STM32_ST_USE_TIMER 12
+define CH_CFG_ST_RESOLUTION 16
+
+# USB
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+# order of UARTs (and USB)
+SERIAL_ORDER OTG1 USART1 USART3
+
+# USART1 (telem2)
+PA10 USART1_RX USART1
+PA9  USART1_TX USART1
+
+# USART3 (GPS2)
+PD9 USART3_RX USART3
+PD8 USART3_TX USART3
+
+define HAL_STORAGE_SIZE 32768
+
+# use last 2 pages for flash storage
+# H743 has 16 pages of 128k each
+STORAGE_FLASH_PAGE 14
+
+# no built-in compass, but probe the i2c bus for all possible
+# external compass types
+define ALLOW_ARM_NO_COMPASS
+
+# two IMUs
+# H743-V1,      ICM20602, MPU6000
+# H743-V1.5/V2, ICM42605, MPU6000
+# H743-V3,      ICM42688P, ICM42605
+
+# DPS310 integrated on I2C2 bus, multiple possible choices for external barometer
+
+
