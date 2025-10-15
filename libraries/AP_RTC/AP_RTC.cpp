@@ -129,6 +129,31 @@ void AP_RTC::set_utc_usec(uint64_t time_utc_usec, source_type type)
         }
     }
 #endif
+
+#if DEBUG_RTC_SHIFT
+    uint64_t new_utc = 0;
+    UNUSED_RESULT(get_utc_usec(new_utc));
+    if (old_utc != new_utc) {
+        if (AP::logger().should_log(0xFFFF)){
+            // log to AP_Logger
+            // @LoggerMessage: RTC
+            // @Description: Information about RTC clock resets
+            // @Field: TimeUS: Time since system startup
+            // @Field: old_utc: old time
+            // @Field: new_utc: new time
+            AP::logger().WriteStreaming(
+                "RTC",
+                "TimeUS,old_utc,new_utc",
+                "sss",
+                "FFF",
+                "QQQ",
+                AP_HAL::micros64(),
+                old_utc,
+                new_utc
+                );
+        }
+    }
+#endif
 }
 
 bool AP_RTC::get_utc_usec(uint64_t &usec) const
