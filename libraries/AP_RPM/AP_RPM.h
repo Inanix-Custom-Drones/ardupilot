@@ -57,6 +57,9 @@ public:
 #if AP_RPM_DRONECAN_ENABLED
         RPM_TYPE_DRONECAN = 7,
 #endif
+#if AP_RPM_AS5600_ENABLED
+		RPM_TYPE_AS5600 = 8,
+#endif
 #if AP_RPM_SIM_ENABLED
         RPM_TYPE_SITL   = 10,
 #endif

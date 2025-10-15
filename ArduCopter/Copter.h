@@ -173,9 +173,6 @@
 #endif
 // Local modules
 #include "Parameters.h"
-#if USER_PARAMS_ENABLED
-#include "UserParameters.h"
-#endif
 #include "mode.h"
 
 class Copter : public AP_Vehicle {
@@ -1012,6 +1009,7 @@ private:
 
     // UserCode.cpp
     void userhook_init();
+	void userhook_SuperFastLoop();
     void userhook_FastLoop();
     void userhook_50Hz();
     void userhook_MediumLoop();

@@ -10,13 +10,17 @@ public:
 
     // Put accessors to your parameter variables here
     // UserCode usage example: g2.user_parameters.get_int8Param()
-    AP_Int8 get_int8Param() const { return _int8; }
+    /*AP_Int8 get_int8Param() const { return _int8; }
     AP_Int16 get_int16Param() const { return _int16; }
     AP_Float get_floatParam() const { return _float; }
-
+*/
 private:
     // Put your parameter variable definitions here
-    AP_Int8 _int8;
-    AP_Int16 _int16;
-    AP_Float _float;
+	
+	AP_Int8 acrtEnable; // = 0;
+	AP_Int8 acrtDebug; // = 0;
+	AP_Int16 acrtPrecision; // = 720;
+	AP_Int8 acrtServoFunction; // = 94;
+	AP_Float acrtFactorRollPitch; // = 0.25;
+
 };

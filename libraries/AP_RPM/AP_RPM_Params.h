@@ -36,6 +36,15 @@ public:
 #if AP_RPM_DRONECAN_ENABLED || AP_RPM_STREAM_ENABLED
     AP_Int8 dronecan_sensor_id;
 #endif
+
+#if AP_RPM_AS5600_ENABLED
+	AP_Int8 as5600_busid;
+	AP_Int32 as5600_busspeed;
+	AP_Int8 as5600_addr;
+	AP_Float as5600_offset;
+	AP_Int8 as5600_servoidx;
+#endif
+
     static const struct AP_Param::GroupInfo var_info[];
 
 };

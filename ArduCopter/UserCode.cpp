@@ -8,6 +8,13 @@ void Copter::userhook_init()
 }
 #endif
 
+#ifdef USERHOOK_SUPERFASTLOOP
+void Copter::userhook_SuperFastLoop()
+{
+    // put your 1000Hz code here
+}
+#endif
+
 #ifdef USERHOOK_FASTLOOP
 void Copter::userhook_FastLoop()
 {
