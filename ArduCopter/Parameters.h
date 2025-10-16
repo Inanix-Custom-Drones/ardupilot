@@ -12,6 +12,9 @@
 #if WEATHERVANE_ENABLED
  #include <AC_AttitudeControl/AC_WeatherVane.h>
 #endif
+#ifdef USER_PARAMS_ENABLED
+#include "UserParameters.h"
+#endif
 
 // Global parameter class.
 //
@@ -588,7 +591,7 @@ public:
 
 #if USER_PARAMS_ENABLED
     // User custom parameters
-    UserParameters user_parameters;
+    UserParameters user_parameters ;
 #endif
 
 #if AUTOTUNE_ENABLED

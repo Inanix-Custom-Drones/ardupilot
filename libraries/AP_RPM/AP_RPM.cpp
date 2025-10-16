@@ -25,6 +25,7 @@
 #include "RPM_HarmonicNotch.h"
 #include "RPM_ESC_Telem.h"
 #include "RPM_DroneCAN.h"
+#include "RPM_AS5600.h"
 
 #include <AP_Logger/AP_Logger.h>
 
@@ -115,6 +116,11 @@ void AP_RPM::init(void)
             drivers[i] = NEW_NOTHROW AP_RPM_DroneCAN(*this, i, state[i]);
             break;
 #endif // AP_RPM_DRONECAN_ENABLED
+#if AP_RPM_AS5600_ENABLED
+        case RPM_TYPE_AS5600:
+            drivers[i] = NEW_NOTHROW AP_RPM_AS5600(*this, i, state[i]);
+            break;
+#endif // AP_RPM_AS5600_ENABLED
 #if AP_RPM_SIM_ENABLED
         case RPM_TYPE_SITL:
             drivers[i] = NEW_NOTHROW AP_RPM_SITL(*this, i, state[i]);

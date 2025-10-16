@@ -89,6 +89,53 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     AP_GROUPINFO("DC_ID", 9, AP_RPM_Params, dronecan_sensor_id, -1),
 #endif
 
+#if AP_RPM_AS5600_ENABLED
+	// @Param: AS56_BUSNUM
+    // @DisplayName: I2C Bus ID
+    // @Description: I2C Bus ID (0 to disable)
+    // @Description{AP_Periph}: I2C Bus ID
+    // @Range: 0 4
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_BUSNUM", 10, AP_RPM_Params, as5600_busid, 0),
+	
+	// @Param: AS56_BUSSPEED
+    // @DisplayName: I2C Bus Speed
+    // @Description: I2C Bus Speed (0 to disable)
+    // @Description{AP_Periph}: I2C Bus Speed
+    // @Range: 400000
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_BUSSPD", 11, AP_RPM_Params, as5600_busspeed, 400000),
+	
+	// @Param: AS56_I2CADDR
+    // @DisplayName: I2C Address
+    // @Description: I2C Address
+    // @Description{AP_Periph}: I2C Address
+    // @Range: 0x36
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_I2CADR", 12, AP_RPM_Params, as5600_addr, 0x36),
+	
+	// @Param: AS56_OFFSET
+    // @DisplayName: AS5600 Offset
+    // @Description: AS5600 Offset (radians)
+    // @Description{AP_Periph}: AS5600 Offset (radians)
+    // @Range: 0 6.28
+    // @Increment: 0.01
+    // @User: Advanced
+    AP_GROUPINFO("AS56_OFST", 13, AP_RPM_Params, as5600_offset, 0),
+	
+	// @Param: AS56_SRVIDX
+    // @DisplayName: AS5600 Servo idx
+    // @Description: AS5600 Servo idx
+    // @Description{AP_Periph}: AS5600 Servo idx
+    // @Range: 0 6.28
+    // @Increment: 0.01
+    // @User: Advanced
+    AP_GROUPINFO("AS56_SRVID", 14, AP_RPM_Params, as5600_servoidx, 1),
+#endif
+
     AP_GROUPEND
 };
 

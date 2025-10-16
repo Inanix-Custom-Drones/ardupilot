@@ -1,15 +1,13 @@
 #include "UserParameters.h"
-#include "config.h"
 
-#if USER_PARAMS_ENABLED
 // "USR" + 13 chars remaining for param name
 const AP_Param::GroupInfo UserParameters::var_info[] = {
 
-    // Put your parameters definition here
-    // Note the maximum length of parameter name is 13 chars
-    AP_GROUPINFO("_INT8", 0, UserParameters, _int8, 0),
-    AP_GROUPINFO("_INT16", 1, UserParameters, _int16, 0),
-    AP_GROUPINFO("_FLOAT", 2, UserParameters, _float, 0),
+	AP_GROUPINFO("ACRT_ENABLE", 0, UserParameters, acrtEnable, 0),
+    AP_GROUPINFO("ACRT_DEBUG", 1, UserParameters, acrtDebug, 0),
+    AP_GROUPINFO("ACRT_PRECI", 2, UserParameters, acrtPrecision, 720),
+    AP_GROUPINFO("ACRT_SRVFCT", 3, UserParameters, acrtServoFunction, 94),
+    AP_GROUPINFO("ACRT_FCTRP", 4, UserParameters, acrtFactorRollPitch, 0.25),
 
     AP_GROUPEND
 };
@@ -18,4 +16,3 @@ UserParameters::UserParameters()
 {
     AP_Param::setup_object_defaults(this, var_info);
 }
-#endif // USER_PARAMS_ENABLED
