@@ -34,7 +34,7 @@
 
 // User Hooks : For User Developed code that you wish to run
 // Put your variable definitions into the UserVariables.h file (or another file name and then change the #define below).
-//#define USERHOOK_VARIABLES "UserVariables.h"
+#define USERHOOK_VARIABLES "UserVariables.h"
 // Put your custom code into the UserCode.cpp with function names matching those listed below and ensure the appropriate #define below is uncommented below
 #define USERHOOK_INIT userhook_init();                      // for code to be run once at startup
 #define USERHOOK_SUPERFASTLOOP userhook_SuperFastLoop();            // for code to be run at 1000hz
@@ -44,4 +44,4 @@
 //#define USERHOOK_SLOWLOOP userhook_SlowLoop();            // for code to be run at 3.3hz
 //#define USERHOOK_SUPERSLOWLOOP userhook_SuperSlowLoop();  // for code to be run at 1hz
 //#define USERHOOK_AUXSWITCH 1                        // for code to handle user aux switches
-#define USER_PARAMS_ENABLED 0                       // to enable user parameters
+#define USER_PARAMS_ENABLED 1                       // to enable user parameters

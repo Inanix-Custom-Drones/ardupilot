@@ -6,7 +6,7 @@ const AP_Param::GroupInfo UserParameters::var_info[] = {
 	AP_GROUPINFO("ACRT_ENABLE", 0, UserParameters, acrtEnable, 0),
     AP_GROUPINFO("ACRT_DEBUG", 1, UserParameters, acrtDebug, 0),
     AP_GROUPINFO("ACRT_PRECI", 2, UserParameters, acrtPrecision, 720),
-    AP_GROUPINFO("ACRT_SRVFCT", 3, UserParameters, acrtServoFunction, 94),
+    AP_GROUPINFO("ACRT_SRV", 3, UserParameters, acrtServo, 0),
     AP_GROUPINFO("ACRT_FCTRP", 4, UserParameters, acrtFactorRollPitch, 0.25),
 
     AP_GROUPEND

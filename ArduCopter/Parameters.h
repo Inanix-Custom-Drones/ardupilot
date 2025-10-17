@@ -2,6 +2,10 @@
 
 #define AP_PARAM_VEHICLE_NAME copter
 
+#ifdef USER_PARAMS_ENABLED
+  #include "UserParameters.h"
+#endif
+
 #include <AP_Common/AP_Common.h>
 #include "RC_Channel_Copter.h"
 #include <AP_Proximity/AP_Proximity.h>
@@ -11,9 +15,6 @@
 #endif
 #if WEATHERVANE_ENABLED
  #include <AC_AttitudeControl/AC_WeatherVane.h>
-#endif
-#ifdef USER_PARAMS_ENABLED
-#include "UserParameters.h"
 #endif
 
 // Global parameter class.
@@ -591,7 +592,7 @@ public:
 
 #if USER_PARAMS_ENABLED
     // User custom parameters
-    UserParameters user_parameters ;
+    UserParameters user_parameters;
 #endif
 
 #if AUTOTUNE_ENABLED

@@ -1255,9 +1255,7 @@ ParametersG2::ParametersG2(void) :
 #if MODE_SMARTRTL_ENABLED
     ,smart_rtl()
 #endif
-#if USER_PARAMS_ENABLED
-    ,user_parameters()
-#endif
+
 #if MODE_FLOWHOLD_ENABLED
     ,mode_flowhold_ptr(&copter.mode_flowhold)
 #endif

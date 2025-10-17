@@ -4,13 +4,33 @@
 // variables
 #ifdef USERHOOK_VARIABLES
 
-#if WII_CAMERA == 1
-WiiCamera           ircam;
-int                 WiiRange=0;
-int                 WiiRotation=0;
-int                 WiiDisplacementX=0;
-int                 WiiDisplacementY=0;
-#endif  // WII_CAMERA
+#if HAL_LOGGING_ENABLED
+
+	const uint8_t LOG_ACTR = 0;
+
+	struct PACKED log_actr {
+	    LOG_PACKET_HEADER;
+	    uint64_t time_us;
+	    float    thrust;
+	    float    pos;
+	};
+	
+	// @LoggerMessage: ACTR
+	// @Description: Information from acuated rotor
+	// @Field: TimeUS: Time since system startup
+	// @Field: thrust: oscillation thrust calculated
+	// @Field: pos: position of the motor in rads
+
+	const LogStructure LOG_ACTR_STRCT = {LOG_ACTR, sizeof(log_actr), "ACTR", "Qff", "TimeUS,Thrust,Pos", "s-r", "F00" , true };
+#endif 
+
+	SRV_Channel *actrChannel;
+	
+	double radStep;
+	double *cosTable;
+	double *sinTable;
+	double *tanTable;
+	
 
 #endif  // USERHOOK_VARIABLES
 
