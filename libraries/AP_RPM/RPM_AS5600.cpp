@@ -60,7 +60,7 @@ AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_Stat
 	        return;
 		}
 		//1000 Hz
-        _dev->register_periodic_callback(1 * AP_USEC_PER_MSEC,
+        _dev->register_periodic_callback(ap_rpm._params[state.instance].as5600_timer * AP_USEC_PER_MSEC,
                                         FUNCTOR_BIND_MEMBER(&AP_RPM_AS5600::_timer, void));
 		
 	}

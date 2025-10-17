@@ -134,6 +134,15 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     // @Increment: 0.01
     // @User: Advanced
     AP_GROUPINFO("AS56_SRVID", 14, AP_RPM_Params, as5600_servoidx, 1),
+	
+	// @Param: AS56_TIMER
+    // @DisplayName: AS5600 timer to read value (ms)
+    // @Description: AS5600 timer to read value (ms)
+    // @Description{AP_Periph}: AS5600 timer to read value (ms)
+    // @Range: 0 1000
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_TIMER", 15, AP_RPM_Params, as5600_timer, 1000),
 #endif
 
     AP_GROUPEND
