@@ -25,21 +25,37 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_Servo_Telem/AP_Servo_Telem.h>
 
+#include <GCS_MAVLink/GCS.h>
+
 extern const AP_HAL::HAL &hal;
 
 AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_State &_state) :
     AP_RPM_Backend(_ap_rpm, instance, _state)
 {
-	if(ap_rpm._params[state.instance].as5600_busid > 0){
+	/*if(ap_rpm._params[state.instance].as5600_busid >= 0){
 		_dev = hal.i2c_mgr->get_device_ptr(
 										ap_rpm._params[state.instance].as5600_busid, 
 										ap_rpm._params[state.instance].as5600_addr,
 										ap_rpm._params[state.instance].as5600_busspeed);
 		if (_dev) {
 			_connected = true;
+			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 connected");
+		}else{
+			GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "AS5600 Not found");
+			return;
 		}
-	}
-	
+		
+		WITH_SEMAPHORE(_dev->get_semaphore());
+        _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
+        _dev->set_retries(2);
+
+        _dev->set_device_type(AS5600_DEFAULT_ADDRESS);
+
+        _dev->register_periodic_callback(10000,
+                                        FUNCTOR_BIND_MEMBER(&AP_RPM_AS5600::update, void));
+		
+		
+	}*/
 }
 
 void AP_RPM_AS5600::update(void)
@@ -61,9 +77,10 @@ void AP_RPM_AS5600::update(void)
 	                         AP_Servo_Telem::TelemetryData::Types::SPEED
 	    };
 		
+		GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f", telem_data.measured_position);
+		
 		servoTelem->update_telem_data(ap_rpm._params[state.instance].as5600_servoidx, telem_data);
 	}
-	
 }
 
 bool AP_RPM_AS5600::begin(uint8_t directionPin)

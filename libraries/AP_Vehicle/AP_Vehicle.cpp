@@ -655,9 +655,7 @@ const AP_Scheduler::Task AP_Vehicle::scheduler_tasks[] = {
 #if AP_NETWORKING_ENABLED
     SCHED_TASK_CLASS(AP_Networking, &vehicle.networking,    update,                   10,  50, 238),
 #endif
-#if AP_RPM_AS5600_ENABLED
-    SCHED_TASK_CLASS(AP_RPM, &vehicle.rpm_sensor, update,                             1000, 5, 239),
-#elif AP_RPM_ENABLED
+#if AP_RPM_ENABLED
 	SCHED_TASK_CLASS(AP_RPM, &vehicle.rpm_sensor, update,                             50, 100, 239),
 #endif
 #if OSD_ENABLED
