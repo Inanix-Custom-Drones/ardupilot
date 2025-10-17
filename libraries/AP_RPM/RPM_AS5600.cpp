@@ -32,37 +32,43 @@ extern const AP_HAL::HAL &hal;
 AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_State &_state) :
     AP_RPM_Backend(_ap_rpm, instance, _state)
 {
-	/*if(ap_rpm._params[state.instance].as5600_busid >= 0){
+	if(ap_rpm._params[state.instance].as5600_busid >= 0){
 		_dev = hal.i2c_mgr->get_device_ptr(
 										ap_rpm._params[state.instance].as5600_busid, 
-										ap_rpm._params[state.instance].as5600_addr,
-										ap_rpm._params[state.instance].as5600_busspeed);
-		if (_dev) {
-			_connected = true;
-			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 connected");
-		}else{
-			GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "AS5600 Not found");
+										ap_rpm._params[state.instance].as5600_addr);
+										//ap_rpm._params[state.instance].as5600_busspeed);
+		if (! _dev) {
+			GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "AS5600 Not found at %u:%u", unsigned(ap_rpm._params[state.instance].as5600_busid), unsigned(ap_rpm._params[state.instance].as5600_addr));
 			return;
 		}
-		
+		 
 		WITH_SEMAPHORE(_dev->get_semaphore());
         _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
-        _dev->set_retries(2);
+        _dev->set_retries(10);
 
-        _dev->set_device_type(AS5600_DEFAULT_ADDRESS);
-
-        _dev->register_periodic_callback(10000,
-                                        FUNCTOR_BIND_MEMBER(&AP_RPM_AS5600::update, void));
+		_dev->set_device_type(AS5600_DEFAULT_ADDRESS);
 		
+		GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 found at %u:%u", unsigned(ap_rpm._params[state.instance].as5600_busid), unsigned(ap_rpm._params[state.instance].as5600_addr));
 		
-	}*/
+		uint8_t status = readStatus();
+		if(status != 0){
+			_connected = true;
+			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 status %u", unsigned(status));
+		}else{
+			GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "AS5600 Issue reading status %u", unsigned(status));
+			delete _dev;
+	        return;
+		}
+		//1000 Hz
+        _dev->register_periodic_callback(1 * AP_USEC_PER_MSEC,
+                                        FUNCTOR_BIND_MEMBER(&AP_RPM_AS5600::_timer, void));
+		
+	}
 }
 
 void AP_RPM_AS5600::update(void)
 {
 	if(isConnected()){
-		readAngle();
-			
 	    state.rate_rpm = getAngularSpeed(AS5600_MODE_RPM, false);
 	    state.signal_quality = 0.5f;
 	    state.last_reading_ms = AP_HAL::millis();
@@ -77,9 +83,16 @@ void AP_RPM_AS5600::update(void)
 	                         AP_Servo_Telem::TelemetryData::Types::SPEED
 	    };
 		
-		GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f", telem_data.measured_position);
+		/*GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f", telem_data.measured_position);*/
 		
 		servoTelem->update_telem_data(ap_rpm._params[state.instance].as5600_servoidx, telem_data);
+	}
+}
+
+void AP_RPM_AS5600::_timer(void)
+{
+	if(isConnected()){
+		readAngle();
 	}
 }
 
@@ -544,19 +557,16 @@ int AP_RPM_AS5600::lastError()
 //
 uint8_t AP_RPM_AS5600::readReg(uint8_t reg)
 {
-  uint8_t *buf = nullptr;
-  _dev->read_registers(reg, buf, 1);
-  return buf[0];
-}
+  uint8_t buf;
+  _dev->read_registers(reg, &buf, 1);
+  return buf;
+} 
 
 uint16_t AP_RPM_AS5600::readReg2(uint8_t reg)
 {
-  uint8_t *buf = nullptr;
+  uint8_t buf[2];
   _dev->read_registers(reg, buf, 2);
-  uint16_t _data = buf[0];
-  _data <<= 8;
-  _data += buf[1];
-  return _data;
+  return (buf[0] << 8) | buf[1];
 }
 
 

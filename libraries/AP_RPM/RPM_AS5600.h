@@ -148,11 +148,13 @@ public:
 	AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_State &_state);
 	
 	// update state
-	void update(void) override;
-
+    void update(void) override;
+	
   bool     begin(uint8_t directionPin = AS5600_SW_DIRECTION_PIN);
   //  made virtual, see #66
   virtual bool isConnected();
+  
+  int16_t  getLastReadAngle(){ return  _lastReadAngle;}
 
   //  address = fixed   0x36 for AS5600,
   //          = default 0x40 for AS5600L
@@ -293,6 +295,8 @@ protected:
   virtual uint16_t readReg2(uint8_t reg);
   virtual uint8_t  writeReg(uint8_t reg, uint8_t value);
   virtual uint8_t  writeReg2(uint8_t reg, uint16_t value);
+  
+  void _timer(void);
 
   bool _connected = false;
   
