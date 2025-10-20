@@ -313,6 +313,12 @@ protected:
   //  for readAngle() and rawAngle()
   uint16_t _offset          = 0;
 
+  //For debug and timing mesure
+  uint64_t calculationTimeActr = 0;
+  uint32_t calculationStartTimerActr = 0;
+  uint16_t calculationIdxActr = 0;
+  const uint16_t NBRE_CALC_TIME_ACTR = 2500;
+  
   //  EXPERIMENTAL
   //  cumulative position counter
   //  works only if the sensor is read often enough.

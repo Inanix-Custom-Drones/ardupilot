@@ -27,9 +27,14 @@
 	SRV_Channel *actrChannel;
 	
 	double radStep;
-	double *cosTable;
+	double *cosTable; 
 	double *sinTable;
 	double *tanTable;
+	
+	uint64_t calculationTimeActr = 0;
+	uint32_t calculationStartTimerActr = 0;
+	uint16_t calculationIdxActr = 0;
+	const uint16_t NBRE_CALC_TIME_ACTR = 2500;
 	
 
 #endif  // USERHOOK_VARIABLES

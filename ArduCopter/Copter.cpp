@@ -147,6 +147,9 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if HAL_LOGGING_ENABLED
     FAST_TASK(Log_Video_Stabilisation),
 #endif
+#ifdef USERHOOK_SUPERFASTLOOP
+    FAST_TASK(userhook_SuperFastLoop),
+#endif
 
     SCHED_TASK(rc_loop,              250,    130,  3),
     SCHED_TASK(throttle_loop,         50,     75,  6),
@@ -239,9 +242,6 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #endif
 #if AP_WINCH_ENABLED
     SCHED_TASK_CLASS(AP_Winch,             &copter.g2.winch,            update,          50,  50, 150),
-#endif
-#ifdef USERHOOK_SUPERFASTLOOP
-    SCHED_TASK(userhook_SuperFastLoop,    1000,     75, 152),
 #endif
 #ifdef USERHOOK_FASTLOOP
     SCHED_TASK(userhook_FastLoop,    100,     75, 153),
