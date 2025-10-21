@@ -62,6 +62,13 @@ void Copter::userhook_SuperFastLoop()
 		}
 		
 		float motorPosRads = radians(telem_data.measured_position);
+		
+		//On estime la poistion qu'aura le moteur lorsque l'on everra l'ordre
+		//En fonction des différents délais de traitement
+		float motorSpeed = radians(telem_data.speed);
+		uint32_t motorDecalageTimeUs = (AP_HAL::micros() - telem_data.last_update_us) + g2.user_parameters.getAcrtDelay();
+		motorPosRads += (motorSpeed/1000000)*motorDecalageTimeUs;
+		
 		uint16_t motorPosTabIdx = (uint16_t) (motorPosRads / radStep);
 		
 		if(g2.user_parameters.getAcrtDebug() == 2){
