@@ -121,6 +121,9 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if FRAME_CONFIG == HELI_FRAME
     FAST_TASK(heli_update_autorotation),
 #endif //HELI_FRAME
+#ifdef USERHOOK_SUPERFASTLOOP
+    FAST_TASK(userhook_SuperFastLoop),
+#endif
     // send outputs to the motors library immediately
     FAST_TASK(motors_output_main),
      // run EKF state estimator (expensive)
@@ -146,9 +149,6 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #endif
 #if HAL_LOGGING_ENABLED
     FAST_TASK(Log_Video_Stabilisation),
-#endif
-#ifdef USERHOOK_SUPERFASTLOOP
-    FAST_TASK(userhook_SuperFastLoop),
 #endif
 
     SCHED_TASK(rc_loop,              250,    130,  3),
