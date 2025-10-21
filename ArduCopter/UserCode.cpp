@@ -194,10 +194,10 @@ void Copter::userhook_SuperFastLoop()
 		calculationTimeActr += AP_HAL::micros64() - timerStart;
 		calculationIdxActr ++;
 		if(calculationIdxActr >= NBRE_CALC_TIME_ACTR){
-			float calculationAvg = calculationTimeActr/NBRE_CALC_TIME_ACTR;
+			uint16_t calculationAvg = (uint16_t) calculationTimeActr/NBRE_CALC_TIME_ACTR;
 			uint16_t timer = AP_HAL::millis() - calculationStartTimerActr;
 			
-			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR time avg %f us %i loops %ims", calculationAvg, NBRE_CALC_TIME_ACTR, timer);
+			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR time avg %i us %i loops %ims", calculationAvg, NBRE_CALC_TIME_ACTR, timer);
 			calculationIdxActr = 0;
 			calculationTimeActr = 0;
 			calculationStartTimerActr = 0;
