@@ -29,6 +29,11 @@
 
 extern const AP_HAL::HAL &hal;
 
+// TODO : Add calibration
+// Listen for message MAV_CMD_PREFLIGHT_CALIBRATION
+// Calibrate with avg value _sumMeasurement
+// Write offset parameter AS56_OFST
+
 AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_State &_state) :
     AP_RPM_Backend(_ap_rpm, instance, _state)
 {
@@ -55,8 +60,18 @@ AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_Stat
 		if(status != 0){
 			_connected = true;
 			
-			setConfigure(0x1f00);
-			//setFastFilter(AS5600_FAST_FILT_LSB10);
+			if(ap_rpm._params[state.instance].as5600_cwccw ==0){
+				setDirection(AS5600_CLOCK_WISE);
+			}else{
+				setDirection(AS5600_COUNTERCLOCK_WISE);
+			}
+			
+			setPowerMode(AS5600_POWERMODE_NOMINAL);
+			setZPosition(0);
+			setMPosition(AS5600_RESO-1);
+			setMaxAngle(AS5600_RESO-1);
+			setSlowFilter(AS5600_SLOW_FILT_2X);
+			setFastFilter(AS5600_FAST_FILT_LSB10);
 			
 			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 status %u", unsigned(status));
 			//printf("AS5600 status %u\n", unsigned(status));
@@ -79,8 +94,9 @@ void AP_RPM_AS5600::update(void)
 	    state.rate_rpm = getAngularSpeed(AS5600_MODE_RPM, false);
 	    state.signal_quality = 0.5f;
 	    state.last_reading_ms = AP_HAL::millis();
-		 
-		//GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f at rpm %f", (_lastReadAngle * AS5600_RAW_TO_DEGREES), state.rate_rpm);
+		if(ap_rpm._params[state.instance].as5600_debug > 2){
+			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f at rpm %f", (_lastReadAngle * AS5600_RAW_TO_DEGREES), state.rate_rpm);
+		}
 	}
 }
 
@@ -105,16 +121,30 @@ void AP_RPM_AS5600::_timer(void)
 	    };
 		servoTelem->update_telem_data(ap_rpm._params[state.instance].as5600_servoidx, telem_data);
 		
-		calculationTimeActr += AP_HAL::micros64() - timerStart;
-		calculationIdxActr ++;
-		if(calculationIdxActr >= NBRE_CALC_TIME_ACTR){
-			float calculationAvg = calculationTimeActr/NBRE_CALC_TIME_ACTR;
-			uint16_t timer = AP_HAL::millis() - calculationStartTimerActr;
+		if(ap_rpm._params[state.instance].as5600_debug > 0){
+			calculationTimeActr += AP_HAL::micros64() - timerStart;
+			calculationIdxActr ++;
+			_sumMeasurement += _lastReadAngle;
+			if(calculationIdxActr >= NBRE_CALC_TIME_ACTR){
+				uint16_t timer = AP_HAL::millis() - calculationStartTimerActr;
+				uint16_t calculationAvgTime = (uint16_t) (calculationTimeActr/NBRE_CALC_TIME_ACTR);
+				uint16_t calculationAvgVal = (uint16_t) (_sumMeasurement/NBRE_CALC_TIME_ACTR);
+				
+				uint8_t status = readStatus();
+				uint8_t agc = readAGC();
+				
+				if(ap_rpm._params[state.instance].as5600_debug > 1){
+					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 read time avg %ius %i loops %ims status %i agc %i avg val %i last val %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc, calculationAvgVal, _lastReadAngle);
+				}else{
+					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 read time avg %ius %i loops %ims status %i agc %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc);
+				}
+				
+				calculationIdxActr = 0;
+				calculationTimeActr = 0;
+				calculationStartTimerActr = 0;
+				_sumMeasurement = 0;
+			}
 			
-			gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 read time avg %f us %i loops %ims", calculationAvg, NBRE_CALC_TIME_ACTR, timer);
-			calculationIdxActr = 0;
-			calculationTimeActr = 0;
-			calculationStartTimerActr = 0;
 		}
 	}
 }

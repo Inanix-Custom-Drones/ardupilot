@@ -143,6 +143,24 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     // @Increment: 1
     // @User: Advanced
     AP_GROUPINFO("AS56_TIMER", 15, AP_RPM_Params, as5600_timer, 1000), 
+	
+	// @Param: AS56_DEBUG
+    // @DisplayName: AS5600 debug
+    // @Description: AS5600 debug : 0 no debug, 1 timer, 2 all
+    // @Description{AP_Periph}: AS5600 debug : 0 no debug, 1 timer, 2 all
+    // @Range: 0 2
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_DEBUG", 16, AP_RPM_Params, as5600_debug, 0), 
+	
+	// @Param: AS56_CWCCW
+    // @DisplayName: AS5600 (Counter)Clock Wise
+    // @Description: AS5600 (Counter)Clock Wise : 0 CW (default), 1 CCW
+    // @Description{AP_Periph}: AS5600 (Counter)Clock Wise : 0 CW (default), 1 CCW
+    // @Range: 0 1
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("AS56_CWCCW", 17, AP_RPM_Params, as5600_cwccw, 0), 
 #endif
 
     AP_GROUPEND

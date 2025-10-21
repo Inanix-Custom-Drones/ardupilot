@@ -314,6 +314,7 @@ protected:
   uint16_t _offset          = 0;
 
   //For debug and timing mesure
+  uint64_t _sumMeasurement = 0;
   uint64_t calculationTimeActr = 0;
   uint32_t calculationStartTimerActr = 0;
   uint16_t calculationIdxActr = 0;

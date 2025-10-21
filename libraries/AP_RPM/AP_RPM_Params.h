@@ -44,6 +44,8 @@ public:
 	AP_Float as5600_offset;
 	AP_Int8 as5600_servoidx;
 	AP_Int16 as5600_timer;
+	AP_Int8 as5600_debug;
+	AP_Int8 as5600_cwccw;
 #endif
 
     static const struct AP_Param::GroupInfo var_info[];
