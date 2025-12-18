@@ -29,6 +29,197 @@
 
 extern const AP_HAL::HAL &hal;
 
+	// --- Fonctions utilitaires de Matrices et Filtre Kalman ---
+
+	// Constructeur
+    KalmanFilter2D::KalmanFilter2D(double initial_theta, double initial_omega) {
+	    // Initialisation de l'état
+	    x[0] = initial_theta;
+	    x[1] = initial_omega;
+	
+	    // Initialisation de la Covariance (Grande incertitude initiale)
+	    for (int i = 0; i < STATE_SIZE; i++) {
+	        for (int j = 0; j < STATE_SIZE; j++) {
+	            P[i][j] = (i == j) ? 10.0 : 0.0;
+	        }
+	    }
+	    
+	    // Initialisation du bruit de mesure R
+	    R[0][0] = R_VAL;
+	    
+	    //std::cout << "Filtre de Kalman 2D initialisé : theta=" << x[0] << ", omega=" << x[1] << std::endl;
+	}
+	
+    // Calcule A = B * C
+    void KalmanFilter2D::matrix_mult(int m, int n, int p, double A[STATE_SIZE][STATE_SIZE], const double B[][STATE_SIZE], const double C[][STATE_SIZE]) {
+        // Redéfini pour les dimensions de l'état (2x2 * 2x2)
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < p; j++) {
+                A[i][j] = 0;
+                for (int k = 0; k < n; k++) {
+                    A[i][j] += B[i][k] * C[k][j];
+                }
+            }
+        }
+    }
+    
+    // Surcharge pour K * H (2x1 * 1x2 -> 2x2)
+    void KalmanFilter2D::matrix_mult_kh(double A[STATE_SIZE][STATE_SIZE], const double K[STATE_SIZE][MEASUREMENT_SIZE], const double H[MEASUREMENT_SIZE][STATE_SIZE]) {
+        for (int i = 0; i < STATE_SIZE; i++) { // m=2
+            for (int j = 0; j < STATE_SIZE; j++) { // p=2
+                A[i][j] = K[i][0] * H[0][j]; // n=1
+            }
+        }
+    }
+
+    // Calcule A = B + C (n x n)
+    void KalmanFilter2D::matrix_add(int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE], const double C[STATE_SIZE][STATE_SIZE]) {
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                A[i][j] = B[i][j] + C[i][j];
+    }
+
+    // Calcule A = B - C (n x n)
+    void KalmanFilter2D::matrix_subtract(int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE], const double C[STATE_SIZE][STATE_SIZE]) {
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                A[i][j] = B[i][j] - C[i][j];
+    }
+
+    // Calcule la transpose de B
+    void KalmanFilter2D::matrix_transpose(int m, int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE]) {
+        for (int i = 0; i < m; i++)
+            for (int j = 0; j < n; j++)
+                A[j][i] = B[i][j];
+    }
+    
+    // Calcule l'inverse d'une matrice 1x1 (scalaire)
+    double KalmanFilter2D::inverse_1x1(double S) const {
+        return (S != 0.0) ? 1.0 / S : 0.0;
+    }
+
+	void KalmanFilter2D::calculate_Q_with_time_jitter(double Q_out[STATE_SIZE][STATE_SIZE], double dt, double omega) const {
+	    double dt2 = dt * dt;
+	    double dt3 = dt2 * dt;
+	    double qc = QC_SPECTRAL_DENSITY; // Bruit de processus classique (accélération)
+	    
+	    // Bruit induit par le jitter temporel sur la position : (omega * sigma_dt)^2
+	    double q_jitter = (omega * omega) * SIGMA_DT2;
+
+	    // Q classique + composante de jitter sur la diagonale de la position
+	    Q_out[0][0] = qc * (dt3 / 3.0) + q_jitter; 
+	    Q_out[0][1] = qc * (dt2 / 2.0);
+	    Q_out[1][0] = qc * (dt2 / 2.0);
+	    Q_out[1][1] = qc * dt;
+	}
+	
+    // Calcule la matrice Q dynamique
+    void KalmanFilter2D::calculate_Q_dynamic(double Q_out[STATE_SIZE][STATE_SIZE], double dt) const {
+        double dt2 = dt * dt;
+        double dt3 = dt2 * dt;
+        double qc = QC_SPECTRAL_DENSITY;
+
+        // Q = qc * [ dt^3/3  dt^2/2 ]
+        //        [ dt^2/2  dt       ]
+        Q_out[0][0] = qc * (dt3 / 3.0);
+        Q_out[0][1] = qc * (dt2 / 2.0);
+        Q_out[1][0] = qc * (dt2 / 2.0);
+        Q_out[1][1] = qc * dt;
+    }
+
+    // --- Méthodes publiques pour obtenir l'état ---
+    double KalmanFilter2D::getTheta() const { return x[0]; }
+    double KalmanFilter2D::getOmega() const { return x[1]; }
+
+    // --- Fonction principale de mise à jour ---
+    void KalmanFilter2D::update(double delta_theta_mesure, double dt_k) {
+        if (dt_k <= 0.0) return;
+
+        // ------------------------------------
+        // PHASE 1 : PRÉDICTION
+        // ------------------------------------
+        
+        // 1. Mise à jour des Matrices F et Q
+        double F[STATE_SIZE][STATE_SIZE] = {
+            {1, dt_k},
+            {0, 1}
+        };
+        double Q_dynamic[STATE_SIZE][STATE_SIZE];
+        //calculate_Q_dynamic(Q_dynamic, dt_k);
+		calculate_Q_with_time_jitter(Q_dynamic, dt_k, x[1]);
+		
+        // 2. Estimation de l'état projeté (x_k|k-1)
+        double x_pred[STATE_SIZE];
+        x_pred[0] = x[0] + x[1] * dt_k; // theta_pred = theta + omega * dt
+        x_pred[1] = x[1];               // omega_pred = omega (modèle CV)
+        
+        // 3. Covariance projetée (P_k|k-1)
+        // P_pred = F * P * F_T + Q_dynamic
+        double F_T[STATE_SIZE][STATE_SIZE];
+        double FP[STATE_SIZE][STATE_SIZE];
+        double FPF_T[STATE_SIZE][STATE_SIZE];
+        double P_pred[STATE_SIZE][STATE_SIZE];
+
+        matrix_transpose(STATE_SIZE, STATE_SIZE, F_T, F);
+        matrix_mult(STATE_SIZE, STATE_SIZE, STATE_SIZE, FP, F, P);
+        matrix_mult(STATE_SIZE, STATE_SIZE, STATE_SIZE, FPF_T, FP, F_T);
+        matrix_add(STATE_SIZE, P_pred, FPF_T, Q_dynamic);
+
+        // ------------------------------------
+        // PHASE 2 : CORRECTION
+        // ------------------------------------
+
+        // 4. Matrice H pour la mesure Delta Theta : H = [ 0, dt_k ]
+        double H[MEASUREMENT_SIZE][STATE_SIZE] = { {0.0, dt_k} };
+        
+        // 5. Calcul de S (Covariance de l'Innovation)
+        // S = H * P_pred * H_T + R
+        double H_T[STATE_SIZE][STATE_SIZE];
+        //double HP_pred[MEASUREMENT_SIZE][STATE_SIZE];
+        matrix_transpose(MEASUREMENT_SIZE, STATE_SIZE, H_T, H); // H_T est 2x1
+        
+        // HP_pred est 1x2. P_pred * H_T est 2x1.
+        // H * P_pred est 1x2.
+        double HP_pred_H_T_scalar;
+        HP_pred_H_T_scalar = H[0][0] * (P_pred[0][0] * H_T[0][0] + P_pred[0][1] * H_T[1][0]) +
+                             H[0][1] * (P_pred[1][0] * H_T[0][0] + P_pred[1][1] * H_T[1][0]);
+        
+        double S_scalar = HP_pred_H_T_scalar + R[0][0];
+
+        // 6. Calcul du Gain de Kalman (K)
+        // K = P_pred * H_T * S^-1
+        double S_inv_scalar = inverse_1x1(S_scalar);
+        double K[STATE_SIZE][MEASUREMENT_SIZE]; // K est 2 x 1
+        
+        // P_pred * H_T est 2x1
+        for (int i = 0; i < STATE_SIZE; i++) {
+            double P_pred_H_T_i = P_pred[i][0] * H_T[0][0] + P_pred[i][1] * H_T[1][0];
+            K[i][0] = P_pred_H_T_i * S_inv_scalar;
+        }
+
+        // 7. Mise à jour de l'état (x_k|k)
+        // Innovation: y = delta_theta_mesure - (omega_pred * dt_k)
+        double delta_theta_predit = x_pred[1] * dt_k;
+        double innovation = delta_theta_mesure - delta_theta_predit;
+        
+        // x_new = x_pred + K * y
+        x[0] = x_pred[0] + K[0][0] * innovation;
+        x[1] = x_pred[1] + K[1][0] * innovation;
+        
+        // 8. Mise à jour de la Covariance (P_k|k)
+        // P_new = (I - K * H) * P_pred
+        double I[STATE_SIZE][STATE_SIZE] = {{1, 0}, {0, 1}};
+        double KH[STATE_SIZE][STATE_SIZE];
+        double I_minus_KH[STATE_SIZE][STATE_SIZE];
+        
+        matrix_mult_kh(KH, K, H); // K * H
+        matrix_subtract(STATE_SIZE, I_minus_KH, I, KH); // I - KH
+        
+        // Mise à jour de la matrice P interne
+        matrix_mult(STATE_SIZE, STATE_SIZE, STATE_SIZE, P, I_minus_KH, P_pred); 
+    }
+
+
 // TODO : Add calibration
 // Listen for message MAV_CMD_PREFLIGHT_CALIBRATION
 // Calibrate with avg value _sumMeasurement
@@ -60,7 +251,7 @@ AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_Stat
 		if(status != 0){
 			_connected = true;
 			
-			if(ap_rpm._params[state.instance].as5600_cwccw ==0){
+			if(ap_rpm._params[state.instance].as5600_cwccw == 0){
 				setDirection(AS5600_CLOCK_WISE);
 			}else{
 				setDirection(AS5600_COUNTERCLOCK_WISE);
@@ -69,62 +260,92 @@ AP_RPM_AS5600::AP_RPM_AS5600(AP_RPM &_ap_rpm, uint8_t instance, AP_RPM::RPM_Stat
 			setPowerMode(AS5600_POWERMODE_NOMINAL);
 			setZPosition(0);
 			setMPosition(AS5600_RESO-1);
-			setMaxAngle(AS5600_RESO-1);
+			setMaxValue(AS5600_RESO-1);
 			setSlowFilter(AS5600_SLOW_FILT_2X);
 			setFastFilter(AS5600_FAST_FILT_LSB10);
 			
 			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 status %u", unsigned(status));
 			//printf("AS5600 status %u\n", unsigned(status));
+			
+			if(detectMagnet(status)){
+				if(magnetTooStrong(status)){
+					_statusMagnet = 0.8f;
+				}else if(magnetTooWeak(status)){
+					_statusMagnet = 0.6f;
+				}else{
+					_statusMagnet = 1.0f;
+				}
+			}
+			readValue();
+			_kf = KalmanFilter2D(_lastReadValue * AS5600_RAW_TO_RADIANS, 0.0);
+
 		}else{
 			GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "AS5600 Issue reading status %u", unsigned(status));
 			//printf("AS5600 Issue reading status %u\n", unsigned(status));
 			delete _dev;
 	        return;
 		}
-		//1000 Hz
+		//1000 Hz voir plus si possible
         _dev->register_periodic_callback(ap_rpm._params[state.instance].as5600_timer,
                                         FUNCTOR_BIND_MEMBER(&AP_RPM_AS5600::_timer, void));
-		
 	}
 }
 
 void AP_RPM_AS5600::update(void)
 {
 	if(isConnected()){
-	    state.rate_rpm = getAngularSpeed(AS5600_MODE_RPM, false);
-	    state.signal_quality = 0.5f;
-	    state.last_reading_ms = AP_HAL::millis();
-		if(ap_rpm._params[state.instance].as5600_debug > 2){
-			GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AS5600 motor pos %f at rpm %f", (_lastReadAngle * AS5600_RAW_TO_DEGREES), state.rate_rpm);
+	    state.rate_rpm = getAngularSpeed(_lastSpeed, AS5600_MODE_RPM);
+	    state.last_reading_ms = _lastMeasurementTime / 1000; //pour des millis
+
+		float signalQuality = _statusMagnet;
+		if(_numberRead>0){
+			signalQuality -= _numberReadError/_numberRead;
+		}
+		_numberRead = 0;
+		_numberReadError = 0;
+		
+  		if(state.rate_rpm > ap_rpm._params[state.instance].maximum ||
+  				state.rate_rpm < ap_rpm._params[state.instance].minimum){
+			signalQuality -= 0.1;
+  		}
+		
+		state.signal_quality = signalQuality;
+		
+		if(ap_rpm._params[state.instance].as5600_debug == 3){
+			GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS5600 val %i motpos %fdeg rpm %f", _lastReadValue, (_lastReadValue * AS5600_RAW_TO_DEGREES), state.rate_rpm);
 		}
 	}
 }
 
 void AP_RPM_AS5600::_timer(void)
 {
-	if(isConnected()){
-		uint32_t timerStart = AP_HAL::micros64();
-		if(calculationStartTimerActr == 0){
-			calculationStartTimerActr = AP_HAL::millis();;
+	if(isConnected() && ap_rpm._params[state.instance].as5600_servoidx > 0){
+		uint32_t timerStart = 0;
+		if(ap_rpm._params[state.instance].as5600_debug > 0){
+			timerStart = AP_HAL::micros64();
+			if(calculationStartTimerActr == 0){
+				calculationStartTimerActr = AP_HAL::millis();
+			}
 		}
 		
-		readAngle();
+		readValue();
 		
 		//Telemetry du servo pour affichage de la pos du moteur
 		AP_Servo_Telem *servoTelem = AP_Servo_Telem::get_singleton();
 		
-		const AP_Servo_Telem::TelemetryData telem_data {
-	        .measured_position = _lastReadAngle * AS5600_RAW_TO_DEGREES,
-			.speed = getAngularSpeed(AS5600_MODE_DEGREES, false),
+		AP_Servo_Telem::TelemetryData telem_data {
+	        .measured_position = _lastReadValue * AS5600_RAW_TO_DEGREES,
+			.speed = getAngularSpeed(_lastSpeed, AS5600_MODE_DEGREES),
 	        .present_types = AP_Servo_Telem::TelemetryData::Types::MEASURED_POSITION |
 	                         AP_Servo_Telem::TelemetryData::Types::SPEED
 	    };
-		servoTelem->update_telem_data(ap_rpm._params[state.instance].as5600_servoidx, telem_data);
+		
+		servoTelem->update_telem_data(ap_rpm._params[state.instance].as5600_servoidx-1, telem_data);
 		
 		if(ap_rpm._params[state.instance].as5600_debug > 0){
 			calculationTimeActr += AP_HAL::micros64() - timerStart;
 			calculationIdxActr ++;
-			_sumMeasurement += _lastReadAngle;
+			_sumMeasurement += _lastReadValue;
 			if(calculationIdxActr >= NBRE_CALC_TIME_ACTR){
 				uint16_t timer = AP_HAL::millis() - calculationStartTimerActr;
 				uint16_t calculationAvgTime = (uint16_t) (calculationTimeActr/NBRE_CALC_TIME_ACTR);
@@ -133,10 +354,10 @@ void AP_RPM_AS5600::_timer(void)
 				uint8_t status = readStatus();
 				uint8_t agc = readAGC();
 				
-				if(ap_rpm._params[state.instance].as5600_debug > 1){
-					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 read time avg %ius %i loops %ims status %i agc %i avg val %i last val %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc, calculationAvgVal, _lastReadAngle);
-				}else{
-					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 read time avg %ius %i loops %ims status %i agc %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc);
+				if(ap_rpm._params[state.instance].as5600_debug == 2){
+					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 rdtmavg %i us %i lps %ims sts %i agc %i avgval %i lstval %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc, calculationAvgVal, _lastReadValue);
+				}else if(ap_rpm._params[state.instance].as5600_debug == 1){
+					gcs().send_text(MAV_SEVERITY_DEBUG, "AS56 rdtmavg %i us %i lps %ims sts %i agc %i", calculationAvgTime, NBRE_CALC_TIME_ACTR, timer, status, agc);
 				}
 				
 				calculationIdxActr = 0;
@@ -147,14 +368,6 @@ void AP_RPM_AS5600::_timer(void)
 			
 		}
 	}
-}
-
-bool AP_RPM_AS5600::begin(uint8_t directionPin)
-{
-  setDirection(AS5600_CLOCK_WISE);
-
-  if (! isConnected()) return false;
-  return true;
 }
 
 
@@ -223,7 +436,7 @@ uint16_t AP_RPM_AS5600::getMPosition()
 }
 
 
-bool AP_RPM_AS5600::setMaxAngle(uint16_t value)
+bool AP_RPM_AS5600::setMaxValue(uint16_t value)
 {
   if (value > 0x0FFF) return false;
   writeReg2(AS5600_MANG, value);
@@ -231,7 +444,7 @@ bool AP_RPM_AS5600::setMaxAngle(uint16_t value)
 }
 
 
-uint16_t AP_RPM_AS5600::getMaxAngle()
+uint16_t AP_RPM_AS5600::getMaxValue()
 {
   uint16_t value = readReg2(AS5600_MANG) & 0x0FFF;
   return value;
@@ -381,7 +594,7 @@ uint8_t AP_RPM_AS5600::getWatchDog()
 //
 //  OUTPUT REGISTERS
 //
-uint16_t AP_RPM_AS5600::rawAngle()
+uint16_t AP_RPM_AS5600::rawValue()
 {
   int16_t value = readReg2(AS5600_RAW_ANGLE);
   if (getOffset() > 0) value += getOffset();
@@ -396,23 +609,104 @@ uint16_t AP_RPM_AS5600::rawAngle()
 }
 
 
-uint16_t AP_RPM_AS5600::readAngle()
+uint16_t AP_RPM_AS5600::readValue()
 {
+  _numberRead++;
+  uint64_t now = AP_HAL::micros64();
   uint16_t value = readReg2(AS5600_ANGLE);
   if (_error != AS5600_OK)
   {
-    return _lastReadAngle;
+	_numberReadError ++;
+    return _lastReadValue;
   }
-  if (getOffset() > 0) value += getOffset();
-  value &= 0x0FFF;
+  
+  uint64_t deltaT = now - _lastMeasurementTime;
+  uint16_t deltaA = 0;
+  _lastMeasurementTime = now;
+  
+  if (getOffset() > 0) {
+	if(value - getOffset() < 0){
+		value += AS5600_RESO;
+	}
+	value -= getOffset();
+  }
 
   if ((_directionPin == AS5600_SW_DIRECTION_PIN) &&
       (_direction == AS5600_COUNTERCLOCK_WISE))
   {
     //  mask needed for value == 0.
-    value = (AS5600_RESO - value) & 0x0FFF;
+    //value = (AS5600_RESO - value) & 0x0FFF;
+	value = (AS5600_RESO - value) ;
   }
-  _lastReadAngle = value;
+  
+  
+  //Calcul de la vitesse
+  if(_lastReadValue < AS5600_RESO){ //On filtre la première lecture de valeur car on ne pourra pas calculer de vitesse
+	int tmpNewVal = value;
+	int tmpLastVal = _lastReadValue;
+	
+	if(tmpLastVal > AS5600_RESO_DIV2 && tmpNewVal < AS5600_RESO_DIV2) { //On vient de passer par le 0
+		tmpLastVal -= AS5600_RESO;
+	}
+	
+	deltaA = abs(tmpNewVal - tmpLastVal) ;
+			
+	if(ap_rpm._params[state.instance].as5600_debug == 5){
+		GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 lstval %i newval %i dT %lli dA %i", _lastReadValue, value, deltaT, deltaA);
+	}	
+	
+    if(deltaA <= AP_RPM_AS5600::AS5600_DZ){
+		
+		// On n'a pas de mouvement... 
+	  	// soit parce qu'on a executé trop vite l'appel au calcul de la vitesse (entre 2 lecture d'angle)
+	  	// soit parce que le moteur est arreté
+	  	uint64_t motorStoppedTime = now - _lastSpeedCalculateTime;
+	  	if(motorStoppedTime >  ap_rpm._params[state.instance].as5600_timer * 5){ //le délai est dépassé, le moteur est arrêté
+	  		if(ap_rpm._params[state.instance].as5600_debug == 4 && motorStoppedTime > 2500000 && ! _msgStoppedSent){ //Ttes les 2.5sec
+	  			GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 spd motor stopped since %lli", motorStoppedTime);
+				_msgStoppedSent = true;
+	  		}
+	  		_lastSpeed = 0;
+	  	}else{
+	  		if(ap_rpm._params[state.instance].as5600_debug == 4  && motorStoppedTime > 2500000 && ! _msgStoppedSent){
+	  			GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 spd not calc last %f", _lastSpeed);
+	  		}
+	  	}
+    }else{
+      	if(deltaT > 0){
+			double dtAngleRad = deltaA*AS5600_RAW_TO_RADIANS;
+			double dtTempsSec = deltaT*AS5600_US_TO_S;
+			_kf.update(dtAngleRad, dtTempsSec);
+			_lastSpeedCalculateTime = now;
+			//value = _kf.getTheta();
+			
+			double speedRadSec = _kf.getOmega();
+			
+	  		_lastSpeed = _kf.getOmega()/AS5600_RAW_TO_RADIANS;
+	  		
+			if(ap_rpm._params[state.instance].as5600_debug == 4){
+				_msgStoppedSent = false; 
+	  			GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 dT %.6f dA %.3f", dtTempsSec, dtAngleRad);
+				GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 kfPos %.3f kfSpd %.3f", _kf.getTheta(), speedRadSec);
+	  		}
+	  	}else{
+	  		if(ap_rpm._params[state.instance].as5600_debug == 4){
+	  			GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 spd not calc dT %lli", deltaT);
+	  		}
+	  	}
+	  }
+	  
+	  /*if((! (_lastSpeed > 0.0)) && ap_rpm._params[state.instance].as5600_debug >= 0){
+		GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 spd0 lstv %i val %i dT %lli dA %i", _lastReadValue, value, deltaT, deltaA);
+	  }*/
+	  
+  }else{
+	if(ap_rpm._params[state.instance].as5600_debug == 4){
+		GCS_SEND_TEXT(MAV_SEVERITY_DEBUG, "AS56 spd 1e calc no read");
+	}
+  }
+
+  _lastReadValue = value;
   return value;
 }
 
@@ -448,21 +742,38 @@ uint16_t AP_RPM_AS5600::readMagnitude()
 }
 
 
+bool AP_RPM_AS5600::detectMagnet(uint8_t status)
+{
+  return (status & AS5600_MAGNET_DETECT) > 1;
+}
+
+
+bool AP_RPM_AS5600::magnetTooStrong(uint8_t status)
+{
+  return (status & AS5600_MAGNET_HIGH) > 1;
+}
+
+
+bool AP_RPM_AS5600::magnetTooWeak(uint8_t status)
+{
+  return (status & AS5600_MAGNET_LOW) > 1;
+}
+
 bool AP_RPM_AS5600::detectMagnet()
 {
-  return (readStatus() & AS5600_MAGNET_DETECT) > 1;
+  return detectMagnet(readStatus());
 }
 
 
 bool AP_RPM_AS5600::magnetTooStrong()
 {
-  return (readStatus() & AS5600_MAGNET_HIGH) > 1;
+  return magnetTooStrong(readStatus());
 }
 
 
 bool AP_RPM_AS5600::magnetTooWeak()
 {
-  return (readStatus() & AS5600_MAGNET_LOW) > 1;
+  return magnetTooWeak(readStatus());
 }
 
 
@@ -494,42 +805,31 @@ bool AP_RPM_AS5600::magnetTooWeak()
 
 float AP_RPM_AS5600::getAngularSpeed(uint8_t mode, bool update)
 {
-  if (update)
-  {
-    _lastReadAngle = readAngle();
-    if (_error != AS5600_OK)
-    {
-      return NAN;
-    }
+  if (update || _lastMeasurementTime == 0){
+    readValue();
   }
-  //  default behaviour
-  uint32_t now     = AP_HAL::micros();
-  int      angle   = _lastReadAngle;
-  uint32_t deltaT  = now - _lastMeasurement;
-  int      deltaA  = angle - _lastAngle;
 
-  //  assumption is that there is no more than 180° rotation
-  //  between two consecutive measurements.
-  //  => at least two measurements per rotation (preferred 4).
-  if (deltaA >  AS5600_RESO_DIV2)      deltaA -= AS5600_RESO;
-  else if (deltaA < -AS5600_RESO_DIV2) deltaA += AS5600_RESO;
-  float speed = (deltaA * 1e6) / deltaT;
+  return getAngularSpeed(_lastSpeed, mode);
+}
 
-  //  remember last time & angle
-  _lastMeasurement = now;
-  _lastAngle       = angle;
+float AP_RPM_AS5600::getAngularSpeed(double value, uint8_t mode)
+{
 
+  double rtnSpeed;
   //  return radians, RPM or degrees.
-  if (mode == AS5600_MODE_RADIANS)
-  {
-    return speed * AS5600_RAW_TO_RADIANS;
+  switch(mode) {
+    case AS5600_MODE_RADIANS:
+      rtnSpeed = value * AS5600_RAW_TO_RADIANS;
+      break;
+    case AS5600_MODE_RPM:
+      rtnSpeed = value * AS5600_RAW_TO_RPM;
+      break;
+    case AS5600_MODE_DEGREES:
+    default:
+      rtnSpeed = value * AS5600_RAW_TO_DEGREES;
   }
-  if (mode == AS5600_MODE_RPM)
-  {
-    return speed * AS5600_RAW_TO_RPM;
-  }
-  //  default return degrees
-  return speed * AS5600_RAW_TO_DEGREES;
+
+  return (float) rtnSpeed;
 }
 
 
@@ -541,23 +841,23 @@ int32_t AP_RPM_AS5600::getCumulativePosition(bool update)
 {
   if (update)
   {
-    _lastReadAngle = readAngle();
+    readValue();
     if (_error != AS5600_OK)
     {
       return _position;  //  last known position.
     }
   }
-  int16_t value = _lastReadAngle;
+  int16_t value = _lastReadValue;
 
   //  whole rotation CW?
   //  less than half a circle
-  if ((_lastPosition > AS5600_RESO_DIV2) && ( value < (_lastPosition - AS5600_RESO_DIV2)))
+  if ((_lastPosition > AS5600_VAL_MIDDLE) && ( value < (_lastPosition - AS5600_VAL_MIDDLE)))
   {
     _position = _position + AS5600_RESO - _lastPosition + value;
   }
   //  whole rotation CCW?
   //  less than half a circle
-  else if ((value > AS5600_RESO_DIV2) && ( _lastPosition < (value - AS5600_RESO_DIV2)))
+  else if ((value > AS5600_VAL_MIDDLE) && ( _lastPosition < (value - AS5600_VAL_MIDDLE)))
   {
     _position = _position - AS5600_RESO - _lastPosition + value;
   }
@@ -589,7 +889,7 @@ int32_t AP_RPM_AS5600::resetPosition(int32_t position)
 
 int32_t AP_RPM_AS5600::resetCumulativePosition(int32_t position)
 {
-  _lastPosition = readAngle();
+  _lastPosition = readValue();
   int32_t old = _position;
   _position = position;
   return old;

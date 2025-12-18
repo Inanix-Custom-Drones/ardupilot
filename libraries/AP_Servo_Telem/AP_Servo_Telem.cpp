@@ -86,7 +86,7 @@ void AP_Servo_Telem::update_telem_data(const uint8_t servo_index, const Telemetr
 
     telemdata.present_types |= new_data.present_types;
     telemdata.last_update_ms = AP_HAL::millis();
-	telemdata.last_update_us = AP_HAL::micros();
+	telemdata.last_update_us = AP_HAL::micros64();
 }
 
 void AP_Servo_Telem::update()

@@ -4,25 +4,17 @@
 // variables
 #ifdef USERHOOK_VARIABLES
 
-#if HAL_LOGGING_ENABLED
-
-	const uint8_t LOG_ACTR = 0;
-
 	struct PACKED log_actr {
 	    LOG_PACKET_HEADER;
 	    uint64_t time_us;
-	    float    thrust;
+	    float    throttle;
+		uint16_t pwm;
+		float    posRead;
 	    float    pos;
+		float    speed;
+		float	 dpitch;
+		float 	 droll;
 	};
-	
-	// @LoggerMessage: ACTR
-	// @Description: Information from acuated rotor
-	// @Field: TimeUS: Time since system startup
-	// @Field: thrust: oscillation thrust calculated
-	// @Field: pos: position of the motor in rads
-
-	const LogStructure LOG_ACTR_STRCT = {LOG_ACTR, sizeof(log_actr), "ACTR", "Qff", "TimeUS,Thrust,Pos", "s-r", "F00" , true };
-#endif 
 
 	SRV_Channel *actrChannel;
 	
@@ -31,12 +23,28 @@
 	double *sinTable;
 	double *tanTable;
 	
+	const uint8_t MIN_PRECISION = 2;
+	
 	uint64_t calculationTimeActr = 0;
 	uint32_t calculationStartTimerActr = 0;
 	uint16_t calculationIdxActr = 0;
 	const uint16_t NBRE_CALC_TIME_ACTR = 2500;
+	const uint16_t PWM_OFF = 1000;
 	
+	const double M_1DOT5_PI = M_PI + M_PI_2; //270 degres
 
+	/**************  Time Based Phase Shifter     ********************/
+	//Algorithme pour estimer le décalage entre l'ordre et le changement de vitesse
+	uint64_t _tbpsTimeDelayUSeconds = 0.0f; // La constante de temps apprise (s)
+    float _tbpsLearningRate = 0.05f;    // Adaptation lente pour la stabilité
+    // Analyseurs
+    float _tbpsAvgThrottle = 0.5f;
+    float _tbpsAvgSpeed = 0.0f;
+    float _tbpsAngleAtCrossThrottle = 0;
+    uint64_t _tbpsTimeAtCrossThrottle = 0;
+    bool _tbpsThrottleWasBelow = true;
+    bool _tbpsSpeedWasBelow = true;
+	
 #endif  // USERHOOK_VARIABLES
 
 

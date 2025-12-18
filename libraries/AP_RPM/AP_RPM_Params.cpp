@@ -119,10 +119,10 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
 	
 	// @Param: AS56_OFFSET
     // @DisplayName: AS5600 Offset
-    // @Description: AS5600 Offset (radians)
-    // @Description{AP_Periph}: AS5600 Offset (radians)
-    // @Range: 0 6.28
-    // @Increment: 0.01
+    // @Description: AS5600 Offset value
+    // @Description{AP_Periph}: AS5600 Offset value
+    // @Range: 0 4096
+    // @Increment: 1
     // @User: Advanced
     AP_GROUPINFO("AS56_OFST", 13, AP_RPM_Params, as5600_offset, 0),
 	
@@ -130,8 +130,8 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
     // @DisplayName: AS5600 Servo idx
     // @Description: AS5600 Servo idx
     // @Description{AP_Periph}: AS5600 Servo idx
-    // @Range: 0 6.28
-    // @Increment: 0.01
+    // @Range: 0 16
+    // @Increment: 1
     // @User: Advanced
     AP_GROUPINFO("AS56_SRVID", 14, AP_RPM_Params, as5600_servoidx, 1),
 	
@@ -146,7 +146,7 @@ const AP_Param::GroupInfo AP_RPM_Params::var_info[] = {
 	
 	// @Param: AS56_DEBUG
     // @DisplayName: AS5600 debug
-    // @Description: AS5600 debug : 0 no debug, 1 timer, 2 all
+    // @Description: AS5600 debug : 0 no debug, 1 timer, 3 update RPM telem, 4 speed calculation, 5 read values, 6 moving avg, 7 erreur successives dans le filtrage 
     // @Description{AP_Periph}: AS5600 debug : 0 no debug, 1 timer, 2 all
     // @Range: 0 2
     // @Increment: 1

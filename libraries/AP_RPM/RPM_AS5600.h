@@ -22,13 +22,89 @@
 
 #define AS5600_LIB_VERSION              (F("0.6.6"))
 
+
+// --- Configuration du Filtre Kalman ---
+#define STATE_SIZE 2     // x: [theta, omega]
+#define MEASUREMENT_SIZE 1 // z: [delta_theta_mesure]
+// Constante pour le bruit de processus (à régler dans le .cpp)
+#define QC_SPECTRAL_DENSITY 0.1 
+// Constante pour le bruit de mesure (à régler dans le .cpp)
+#define R_VAL 0.000001
+// Variance supposée de votre horloge/système (ex: 1ms de gigue = 0.001^2)
+#define SIGMA_DT2 0.000001
+
+/**
+ * @class KalmanFilter2D
+ * @brief Implémente un Filtre de Kalman 2D (Position angulaire et Vitesse angulaire)
+ * utilisant une mesure de différence de position (Delta Theta) et gérant un DT variable.
+ */
+class KalmanFilter2D {
+private:
+    // --- État du Filtre ---
+    double x[STATE_SIZE];             // [theta, omega] (Estimation de l'état)
+    double P[STATE_SIZE][STATE_SIZE]; // Matrice de Covariance d'Erreur
+    double R[MEASUREMENT_SIZE][MEASUREMENT_SIZE]; // Matrice de Covariance du Bruit de Mesure
+
+    // --- Fonctions Privées (Utilitaires de Matrices et Calcul Q) ---
+
+    // Calcule A = B * C (redéfini pour la clarté)
+    void matrix_mult(int m, int n, int p, double A[STATE_SIZE][STATE_SIZE], const double B[][STATE_SIZE], const double C[][STATE_SIZE]);
+    
+    // Calcule K * H (2x1 * 1x2 -> 2x2)
+    void matrix_mult_kh(double A[STATE_SIZE][STATE_SIZE], const double K[STATE_SIZE][MEASUREMENT_SIZE], const double H[MEASUREMENT_SIZE][STATE_SIZE]);
+
+    // Calcule A = B + C
+    void matrix_add(int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE], const double C[STATE_SIZE][STATE_SIZE]);
+
+    // Calcule A = B - C
+    void matrix_subtract(int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE], const double C[STATE_SIZE][STATE_SIZE]);
+
+    // Calcule la transpose de B
+    void matrix_transpose(int m, int n, double A[STATE_SIZE][STATE_SIZE], const double B[STATE_SIZE][STATE_SIZE]);
+    
+    // Calcule l'inverse d'une matrice 1x1
+    double inverse_1x1(double S) const;
+
+    // Calcule la matrice Q dynamique en fonction de dt
+    void calculate_Q_dynamic(double Q_out[STATE_SIZE][STATE_SIZE], double dt) const;
+	void calculate_Q_with_time_jitter(double Q_out[STATE_SIZE][STATE_SIZE], double dt, double omega) const;
+public:
+    /**
+     * @brief Constructeur du Filtre de Kalman.
+     * @param initial_theta Position angulaire initiale estimée (rad).
+     * @param initial_omega Vitesse angulaire initiale estimée (rad/s).
+     */
+    KalmanFilter2D(double initial_theta, double initial_omega);
+
+    /**
+     * @brief Exécute une étape de prédiction et de correction du Filtre de Kalman.
+     * @param delta_theta_mesure La nouvelle mesure de déplacement angulaire (Delta Theta).
+     * @param dt_k Le temps écoulé depuis la dernière mesure (Delta t).
+     */
+    void update(double delta_theta_mesure, double dt_k);
+
+    /**
+     * @brief Retourne l'estimation lissée de la position angulaire.
+     */
+    double getTheta() const;
+
+    /**
+     * @brief Retourne l'estimation lissée de la vitesse angulaire.
+     */
+    double getOmega() const;
+};
+
 class AP_RPM_AS5600 : public AP_RPM_Backend
 {
+	
+	
 public:
-
 	static const uint8_t AS5600_RESO_BITS = 12;
 	static const uint16_t AS5600_RESO = pow(2,AS5600_RESO_BITS);
-	static const uint16_t AS5600_RESO_DIV2 = AS5600_RESO/2;
+	static const uint16_t AS5600_RESO_DIV2 = AS5600_RESO/2.0f;
+	static const uint16_t AS5600_VAL_MIDDLE = AS5600_RESO_DIV2 - 1;
+	static const uint8_t AS5600_DZ = 5; //Dead zone
+	static constexpr double AS5600_US_TO_S = 1/pow(10,6); //Conversion de microsec a sec
 	
 	//  default addresses
 	static const uint8_t AS5600_DEFAULT_ADDRESS    = 0x36;
@@ -149,12 +225,11 @@ public:
 	
 	// update state
     void update(void) override;
-	
-  bool     begin(uint8_t directionPin = AS5600_SW_DIRECTION_PIN);
+
   //  made virtual, see #66
   virtual bool isConnected();
   
-  int16_t  getLastReadAngle(){ return  _lastReadAngle;}
+  int16_t  getLastReadValue(){ return  _lastReadValue;}
 
   //  address = fixed   0x36 for AS5600,
   //          = default 0x40 for AS5600L
@@ -185,8 +260,8 @@ public:
 
   //  0 .. 4095
   //  returns false if parameter out of range
-  bool     setMaxAngle(uint16_t value);
-  uint16_t getMaxAngle();
+  bool     setMaxValue(uint16_t value);
+  uint16_t getMaxValue();
 
   //  access the whole configuration register
   //  check datasheet for bit fields
@@ -238,8 +313,8 @@ public:
 
 
   //  READ OUTPUT REGISTERS
-  uint16_t rawAngle();
-  uint16_t readAngle();
+  uint16_t rawValue();
+  uint16_t readValue();
 
   //  software based offset.
   //  degrees = -359.99 .. 359.99 (preferred)
@@ -257,6 +332,10 @@ public:
   bool     detectMagnet();
   bool     magnetTooStrong();
   bool     magnetTooWeak();
+  
+  bool     detectMagnet(uint8_t status);
+  bool     magnetTooStrong(uint8_t status);
+  bool     magnetTooWeak(uint8_t status);
 
 
   //  BURN COMMANDS
@@ -270,8 +349,8 @@ public:
   //  approximation of the angular speed in rotations per second.
   //  mode == 1: radians /second
   //  mode == 0: degrees /second  (default)
-  float    getAngularSpeed(uint8_t mode = AS5600_MODE_DEGREES,
-                           bool update = true);
+  float    getAngularSpeed(uint8_t mode = AS5600_MODE_DEGREES, bool update = true);				   
+  float    getAngularSpeed(double value, uint8_t mode = AS5600_MODE_DEGREES);
 
   //  EXPERIMENTAL CUMULATIVE POSITION
   //  reads sensor and updates cumulative position
@@ -301,16 +380,18 @@ protected:
   bool _connected = false;
   
   uint8_t  _address         = AS5600_DEFAULT_ADDRESS;
-  uint8_t  _directionPin    = 255;
+  uint8_t  _directionPin    = AS5600_SW_DIRECTION_PIN;
   uint8_t  _direction       = AS5600_CLOCK_WISE;
   int      _error           = AS5600_OK;
 
   //  for getAngularSpeed()
-  uint32_t _lastMeasurement = 0;
-  int16_t  _lastAngle       = 0;
-  int16_t  _lastReadAngle   = 0;
+  uint64_t _lastMeasurementTime = 0;
+  uint64_t _lastSpeedCalculateTime = 0;
+  bool _msgStoppedSent = false;
+  uint16_t _lastReadValue   = AS5600_RESO;
+  float _lastSpeed = 0;
 
-  //  for readAngle() and rawAngle()
+  //  for readValue() and rawValue()
   uint16_t _offset          = 0;
 
   //For debug and timing mesure
@@ -320,15 +401,23 @@ protected:
   uint16_t calculationIdxActr = 0;
   const uint16_t NBRE_CALC_TIME_ACTR = 2500;
   
+  //For signal quality
+  float _statusMagnet = 0;
+  uint16_t _numberRead = 0;
+  uint16_t _numberReadError = 0;
+  
   //  EXPERIMENTAL
   //  cumulative position counter
   //  works only if the sensor is read often enough.
   int32_t  _position        = 0;
   int16_t  _lastPosition    = 0;
 
+  
+  //Filtre Kalman
+  KalmanFilter2D _kf = KalmanFilter2D(0.0, 0.0);;
+  
 private:
   AP_HAL::I2CDevice *_dev;
-
 };
 
 #endif

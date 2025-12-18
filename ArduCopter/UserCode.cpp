@@ -4,36 +4,34 @@
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
 {
-	if(g2.user_parameters.getAcrtDebug()){
-		gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR Activated");
+	
+	if(g2.user_parameters.getAcrtServo() > 0){
+		//On retrouve le channel du moteur
+		actrChannel = SRV_Channels::srv_channel(g2.user_parameters.getAcrtServo()-1);
 	}
 	
-	//printf("userhook_init 1");
-	//On retrouve le channel du moteur
-	actrChannel = SRV_Channels::srv_channel(g2.user_parameters.getAcrtServo());
-	
-	//printf("userhook_init 2");
-	
-	//Stockage des cos/sin pour accélérer les traitements ensuite
-	cosTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
-	sinTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
-	tanTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
-	
-	//printf("userhook_init 3");
-	
-	radStep = M_2PI / g2.user_parameters.getAcrtPrecision();
-	
-	for(uint16_t i = 0; i < g2.user_parameters.getAcrtPrecision() ; i++){
-		//printf("userhook_init 4");
-		cosTable[i] = cos(i * radStep);
-		sinTable[i] = sin(i * radStep);
-		tanTable[i] = tan(i * radStep);
+	if(g2.user_parameters.getAcrtPrecision() > MIN_PRECISION){
+		//Stockage des cos/sin pour accélérer les traitements ensuite
+		cosTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
+		sinTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
+		//TODO retrouver les tangeantes au lien de les calculer dans la boucle de calculs
+		//tanTable = (double *)malloc(g2.user_parameters.getAcrtPrecision() * sizeof(double));
+		
+		radStep = M_2PI / g2.user_parameters.getAcrtPrecision();
+		
+		for(uint16_t i = 0; i < g2.user_parameters.getAcrtPrecision() ; i++){
+			cosTable[i] = cos(i * radStep);
+			sinTable[i] = sin(i * radStep);
+			//tanTable[i] = tan(i * radStep);
+		}
 	}
+	
+	gcs().send_text(MAV_SEVERITY_INFO, "ACTR initied");
+	
 }
 #endif
 
 #ifdef USERHOOK_SUPERFASTLOOP
-
 void Copter::userhook_SuperFastLoop()
 {
 	/**
@@ -41,57 +39,93 @@ void Copter::userhook_SuperFastLoop()
 	*/ 
 	//Valeur à calculer
 	double thrustOscillant = 0;
+	double motorPosReadRads = 0.0;
+	double motorPosRads = 0.0;
+	float angularSpeed = 0.0;
 	
-	uint32_t timerStart = 0;
-	if(g2.user_parameters.getAcrtDebug()){
-		timerStart = AP_HAL::micros64();
+	uint64_t timerStart = AP_HAL::micros64();
+	if(g2.user_parameters.getAcrtDebug()  == 1){
 		if(calculationStartTimerActr == 0){
-			calculationStartTimerActr = AP_HAL::millis();;
+			calculationStartTimerActr = AP_HAL::millis();
 		}
 	}
 	
-	if(g2.user_parameters.getAcrtEnable()){
+	float pitchCTRL = motors->get_pitch();
+	float rollCTRL = motors->get_roll();
+	
+	AP_Servo_Telem *servoTelem = AP_Servo_Telem::get_singleton();
+	AP_Servo_Telem::TelemetryData telem_data;
+	
+	if(g2.user_parameters.getAcrtEnable() 
+			&& g2.user_parameters.getAcrtServo() > 0
+			&& motors->armed() 
+			&& is_tradheli() 
+			&& motors->get_interlock()){
 		
 		//On retrouve la position du moteur
-		AP_Servo_Telem *servoTelem = AP_Servo_Telem::get_singleton();
-		AP_Servo_Telem::TelemetryData telem_data;
-		servoTelem->get_telem(g2.user_parameters.getAcrtServo(), telem_data);
+		servoTelem->get_telem(g2.user_parameters.getAcrtServo()-1, telem_data);
 		
 		if (! telem_data.present(AP_Servo_Telem::TelemetryData::Types::MEASURED_POSITION)) {
 			return;
 		}
 		
-		float motorPosRads = radians(telem_data.measured_position);
+		if (telem_data.present(AP_Servo_Telem::TelemetryData::Types::SPEED)) {
+			angularSpeed = radians(telem_data.speed);
+		}
+		
+		motorPosReadRads = radians(telem_data.measured_position);
 		
 		//On estime la poistion qu'aura le moteur lorsque l'on everra l'ordre
 		//En fonction des différents délais de traitement
-		float motorSpeed = radians(telem_data.speed);
-		uint32_t motorDecalageTimeUs = (AP_HAL::micros() - telem_data.last_update_us) + g2.user_parameters.getAcrtDelay();
-		motorPosRads += (motorSpeed/1000000)*motorDecalageTimeUs;
 		
-		uint16_t motorPosTabIdx = (uint16_t) (motorPosRads / radStep);
+		/*if(g2.user_parameters.getAcrtDelay() >= 0 && angularSpeed > 0){
+			uint32_t motorDecalageTimeUs = (AP_HAL::micros64() - telem_data.last_update_us) + g2.user_parameters.getAcrtDelay();
+			motorPosRads = motorPosReadRads + angularSpeed*motorDecalageTimeUs/1e6;
+		}else{
+			motorPosRads = motorPosReadRads;
+		}
+		
+		while(motorPosRads >= M_2PI){
+			motorPosRads -= M_2PI;
+		}*/
+		
+		/**************  Time Based Phase Shifter     ********************/
+        // Calcule l'avance angulaire nécessaire pour compenser le temps de retard
+        float angularAdvance = angularSpeed * _tbpsTimeDelayUSeconds / pow(10,6);
+        
+        // Limite l'avance à 90° pour éviter les instabilités
+        if (angularAdvance > M_PI_2) angularAdvance = M_PI_2;
+
+        motorPosRads = fmod(motorPosReadRads + angularAdvance, M_2PI);
+		/**************  FIN Time Based Phase Shifter     ********************/
+		
+		uint16_t motorPosTabIdx = -1;
+		if(g2.user_parameters.getAcrtPrecision() > MIN_PRECISION){
+			motorPosTabIdx = (uint16_t) (motorPosRads / radStep);
+		}
+		
+		while(motorPosTabIdx >= g2.user_parameters.getAcrtPrecision()){
+			motorPosTabIdx -= g2.user_parameters.getAcrtPrecision();
+		}
 		
 		if(g2.user_parameters.getAcrtDebug() == 2){
-			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR motor position %f and array idx %u", motorPosRads, motorPosTabIdx);
+			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR motpos %f idx %u spd %f", motorPosRads, motorPosTabIdx, angularSpeed);
 		}
 		
 		//Valeurs de commande
 		//valeur entre 0 et 1
 		float throttleIN = motors->get_throttle();
-		
-		//TODO a supprimer DEBUG pour avoir une valeur
-		throttleIN = 0.5;
 
 		if(throttleIN > 0){	
 			//valeurs entre -1 et 1
-			float pitchCTRL = motors->get_pitch();
-			float rollCTRL = motors->get_roll();
 			
-			//Angle du déplacement
+			pitchCTRL=0.0f;
+			
+			//Angle du déplacement demandé
 			double angleDep = 0;
 			
-			if(g2.user_parameters.getAcrtDebug() == 2){
-				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR actrChannel.num %i actrChannel.min %i actrChannel.max %i throttleIN %f pitchCTRL %f rollCTRL %f",
+			if(g2.user_parameters.getAcrtDebug() == 3){
+				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR ch# %i ch.min %i ch.max %i th %f pi %f ro %f",
 													actrChannel->get_function(), actrChannel->get_output_min(), actrChannel->get_output_max(), throttleIN, pitchCTRL, rollCTRL);	   
 			}
 			
@@ -124,20 +158,41 @@ void Copter::userhook_SuperFastLoop()
 		      angleDepForMin = angleDepForMin - M_2PI;
 		    }
 			
-
 			//calcul des valeurs min/max de commande que l'on peut atteindre pour ce déplacement
-		    uint16_t radStepForDepMax = (uint16_t) (angleDep/radStep);
-		    double cosAngleDep = cosTable[radStepForDepMax];
-		    double sinAngleDep = sinTable[radStepForDepMax];
-	
-		    uint16_t radStepForDepMin = (uint16_t) (angleDepForMin/radStep);
-		    double cosAngleDepMin = cosTable[radStepForDepMin];
-		    double sinAngleDepMin = sinTable[radStepForDepMin];
+			double cosAngleDep = 0.0;
+			double sinAngleDep = 0.0;
+			double cosAngleDepMin = 0.0;
+			double sinAngleDepMin = 0.0;
+			double cosMotPos = 0.0;
+			double sinMotPos = 0.0;
+			if(g2.user_parameters.getAcrtPrecision() > MIN_PRECISION){
+				uint16_t radStepForDepMax = (uint16_t) (angleDep/radStep);
+			    cosAngleDep = cosTable[radStepForDepMax];
+			    sinAngleDep = sinTable[radStepForDepMax];
+		
+			    uint16_t radStepForDepMin = (uint16_t) (angleDepForMin/radStep);
+			    cosAngleDepMin = cosTable[radStepForDepMin];
+			    cosAngleDepMin = sinTable[radStepForDepMin];
+				
+				cosMotPos = cosTable[motorPosTabIdx];
+				sinMotPos = sinTable[motorPosTabIdx];
+			}else{
+				cosAngleDep = cos(angleDep);
+				sinAngleDep = sin(angleDep);
+				cosAngleDepMin = cos(angleDepForMin);
+				cosAngleDepMin = sin(angleDepForMin);
+				
+				cosMotPos = cos(motorPosRads);
+				sinMotPos = sin(motorPosRads);
+			}
 		    float absolutePicth = abs(pitchCTRL);
 		    float absolutRoll = abs(rollCTRL);
-		    double maxCmdVal = throttleIN + throttleIN * ((absolutePicth * cosAngleDep) + (absolutRoll * sinAngleDep)) * g2.user_parameters.getAcrtFactorRollPitch();
-		    double minCmdVal = throttleIN + throttleIN * ((absolutePicth * cosAngleDepMin) + (absolutRoll * sinAngleDepMin)) * g2.user_parameters.getAcrtFactorRollPitch();
 	
+			// calcul de la commande a envoyer au moteur en fonction de la position de l'hélice
+		    thrustOscillant = throttleIN + throttleIN * ((pitchCTRL * cosMotPos) + (rollCTRL * sinMotPos)) * g2.user_parameters.getAcrtFactorRollPitch();
+		    
+			double maxCmdVal = throttleIN + throttleIN * ((absolutePicth * cosAngleDep) + (absolutRoll * sinAngleDep)) * g2.user_parameters.getAcrtFactorRollPitch();
+		    double minCmdVal = throttleIN + throttleIN * ((absolutePicth * cosAngleDepMin) + (absolutRoll * sinAngleDepMin)) * g2.user_parameters.getAcrtFactorRollPitch();
 
 			if (maxCmdVal < minCmdVal){
 		      double tmpCmdval = minCmdVal;
@@ -146,58 +201,98 @@ void Copter::userhook_SuperFastLoop()
 		    }
 			
 			double outputMaxCmdVal = MIN(1, maxCmdVal);
-		    double outputMinCmdVal = MAX(0, minCmdVal);
-	
-			// calcul de la commande a envoyer au moteur en fonction de la position de l'hélice
-		    thrustOscillant = throttleIN + throttleIN * ((pitchCTRL * cosTable[motorPosTabIdx]) + (rollCTRL * sinTable[motorPosTabIdx])) * g2.user_parameters.getAcrtFactorRollPitch();
-		    
+		    double outputMinCmdVal = MAX(throttleIN*g2.user_parameters.getAcrtMinThrottleRatio(), minCmdVal);
+			
 			//On map le thrust sur le min/max du thrust possible
 			thrustOscillant = outputMinCmdVal + (thrustOscillant - minCmdVal)*(outputMaxCmdVal - outputMinCmdVal)/(maxCmdVal - minCmdVal);
-	
-			if(g2.user_parameters.getAcrtDebug() == 2){
-				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR radStepForDepMax %i minCmdVal %f maxCmdVal %f outputMinCmdVal %f outputMaxCmdVal %f thrustOscillant %f",
-													radStepForDepMax, minCmdVal, maxCmdVal, outputMinCmdVal, outputMaxCmdVal, thrustOscillant);
+			
+			/**************  Time Based Phase Shifter     ********************/
+			_tbpsAvgThrottle = (_tbpsAvgThrottle * 0.99f) + (thrustOscillant * 0.01f);
+	        _tbpsAvgSpeed = (_tbpsAvgSpeed * 0.99f) + (angularSpeed * 0.01f);
+
+	        // Détection passage moyenne - Commande
+	        if (_tbpsThrottleWasBelow && thrustOscillant > _tbpsAvgThrottle) {
+	            _tbpsAngleAtCrossThrottle = motorPosReadRads;
+	            _tbpsTimeAtCrossThrottle = timerStart; // On note le temps précis
+	            _tbpsThrottleWasBelow = false;
+	        } else if (thrustOscillant < _tbpsAvgThrottle) {
+	            _tbpsThrottleWasBelow = true;
+	        }
+
+	        // Détection passage moyenne - Vitesse réelle
+	        if (_tbpsSpeedWasBelow && angularSpeed > _tbpsAvgSpeed) {
+	            float angleAtCrossSpeed = motorPosReadRads;
+	            _tbpsSpeedWasBelow = false;
+	            
+	            // Calcul du retard temporel constaté sur ce cycle
+	            float measuredDelayRad = fmod(angleAtCrossSpeed - _tbpsAngleAtCrossThrottle + M_2_PI, M_2_PI);
+	            if (angularSpeed > 0) {
+	                float measuredTimeDelayUS = (measuredDelayRad / angularSpeed) / pow(10,6) ;
+	                
+	                // Mise à jour de la constante de temps (Lissage)
+	                _tbpsTimeDelayUSeconds = (_tbpsTimeDelayUSeconds * (1.0f - _tbpsLearningRate)) + (measuredTimeDelayUS * _tbpsLearningRate);
+	            }
+	        } else if (angularSpeed < _tbpsAvgSpeed) {
+	            _tbpsSpeedWasBelow = true;
+	        }
+			/**************  Fin Time Based Phase Shifter     ********************/
+			
+			
+			if(g2.user_parameters.getAcrtDebug() == 4){
+				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR %f < cmdVal < %f %f < output < %f thr %f",
+													minCmdVal, maxCmdVal, outputMinCmdVal, outputMaxCmdVal, thrustOscillant);
 
 			}
-		
 			 
-			#if HAL_LOGGING_ENABLED
-			    struct log_actr pkt = {
-			      LOG_PACKET_HEADER_INIT(LOG_ACTR),
-			      time_us         : AP_HAL::micros64(),
-			      thrust 		  : (float) thrustOscillant,
-			      pos          	  : motorPosRads
-			    };
-			    logger.WriteBlock(&pkt, sizeof(pkt));
-			#endif
 		}	
 	    
 	}
-	if(thrustOscillant > 0) {
-		//On calcule le PWM
-		//Min et max du channel out
-		uint16_t channelOutMin = actrChannel->get_output_min();
-		uint16_t channelOutMax = actrChannel->get_output_max();
-		
-     	uint16_t pwmOscillant = (uint16_t) (channelOutMin + thrustOscillant * (channelOutMax - channelOutMin));
-		if(g2.user_parameters.getAcrtDebug() == 2){
-			uint32_t timerEnd = AP_HAL::micros64() - timerStart;
+	if(g2.user_parameters.getAcrtServo() > 0){
+		if(thrustOscillant > 0) {
+			//On calcule le PWM
+			//Min et max du channel out
+			uint16_t channelOutMin = actrChannel->get_output_min();
+			uint16_t channelOutMax = actrChannel->get_output_max();
 			
-			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR pwmOscillant %ipwm in %lius start at %li", pwmOscillant, timerEnd, (uint32_t) (timerStart/1000));
+	     	uint16_t pwmOscillant = (uint16_t) (channelOutMin + thrustOscillant * (channelOutMax - channelOutMin));
+			if(g2.user_parameters.getAcrtDebug() == 5){
+				uint32_t timerEnd = AP_HAL::micros64() - timerStart;
+				
+				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR pwm %i calc in %li us", pwmOscillant, timerEnd);
+			}
+			actrChannel->set_output_pwm(pwmOscillant);
+
+			#if HAL_LOGGING_ENABLED
+			if(g2.user_parameters.getAcrtDebug() >= 0){
+				
+				const log_actr pkt {
+			      LOG_PACKET_HEADER_INIT(LOG_ACTR),
+			      time_us         : AP_HAL::micros64(),
+			      throttle 		  : (float) thrustOscillant,
+				  pwm 	 		  : pwmOscillant,
+			      posRead         : (float) motorPosReadRads,
+				  pos          	  : (float) motorPosRads,
+				  speed			  : angularSpeed,
+				  dpitch 		  : pitchCTRL,
+				  droll			  : rollCTRL,
+			    };
+			    logger.WriteBlock(&pkt, sizeof(pkt));
+			}
+			#endif
+	    }else{
+	    	actrChannel->set_output_pwm(PWM_OFF);
 		}
-		actrChannel->set_output_pwm(pwmOscillant);
-    }else{
-    	actrChannel->set_output_pwm(0);
 	}
 	
-	if(g2.user_parameters.getAcrtDebug()){
+	
+	if(g2.user_parameters.getAcrtDebug() == 1){
 		calculationTimeActr += AP_HAL::micros64() - timerStart;
 		calculationIdxActr ++;
 		if(calculationIdxActr >= NBRE_CALC_TIME_ACTR){
 			uint16_t calculationAvg = (uint16_t) calculationTimeActr/NBRE_CALC_TIME_ACTR;
 			uint16_t timer = AP_HAL::millis() - calculationStartTimerActr;
 			
-			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR time avg %i us %i loops %ims", calculationAvg, NBRE_CALC_TIME_ACTR, timer);
+			gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR time avg %i us %i loops %i ms", calculationAvg, NBRE_CALC_TIME_ACTR, timer);
 			calculationIdxActr = 0;
 			calculationTimeActr = 0;
 			calculationStartTimerActr = 0;

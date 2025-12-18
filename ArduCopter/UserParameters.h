@@ -14,6 +14,7 @@ public:
 	AP_Int8 getAcrtServo(){return acrtServo;} // = 94;
 	AP_Float getAcrtFactorRollPitch(){return acrtFactorRollPitch;} // = 0.25;
 	AP_Int16 getAcrtDelay(){return acrtDelay;}
+	AP_Float getAcrtMinThrottleRatio(){return acrtMinThrottleRatio;} // = 0.9;
 
 private:
     // Put your parameter variable definitions here
@@ -24,5 +25,8 @@ private:
 	AP_Int8 acrtServo; // = 94;
 	AP_Float acrtFactorRollPitch; // = 0.25;
 	AP_Int16 acrtDelay;
+	AP_Float acrtMinThrottleRatio;
+	
+	
 
 };

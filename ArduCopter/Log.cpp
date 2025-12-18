@@ -571,7 +571,19 @@ const struct LogStructure Copter::log_structure[] = {
 
     { LOG_RATE_THREAD_DT_MSG, sizeof(log_Rate_Thread_Dt),
       "RTDT", "Qffff", "TimeUS,dt,dtAvg,dtMax,dtMin", "sssss", "F----" , true },
-
+	  
+#ifdef USERHOOK_VARIABLES  
+// @LoggerMessage: ACTR
+// @Description: Information from acuated rotor
+// @Field: TimeUS: Time since system startup
+// @Field: throttle: oscillation thrust calculated
+// @Field: posRead: position read of the motor in rads
+// @Field: pos: position calculated of the motor in rads (taking into account speed and delay)
+// @Field: speed: speed of the motor in deg/s
+// @Field: dpitch: desired pitch
+// @Field: droll: desired roll
+    {LOG_ACTR, sizeof(log_actr), "ACTR", "QfHfffff", "TimeUS,Throttle,Pwm,PosReadPos,Pos,Speed,Dpitch,Droll", "s-srrk--", "F-C-----" , true },
+#endif	  
 };
 
 uint8_t Copter::get_num_log_structures() const

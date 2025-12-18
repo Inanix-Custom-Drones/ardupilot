@@ -38,7 +38,7 @@ public:
         // last update time in milliseconds, determines data is stale
         uint32_t last_update_ms;
 		
-		// last update time in milliseconds, determines data is stale
+		// last update time in microsecondes, determines data is stale
         uint64_t last_update_us;
 
         // telemetry types present
