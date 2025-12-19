@@ -15,6 +15,8 @@ public:
 	AP_Float getAcrtFactorRollPitch(){return acrtFactorRollPitch;} // = 0.25;
 	AP_Int16 getAcrtDelay(){return acrtDelay;}
 	AP_Float getAcrtMinThrottleRatio(){return acrtMinThrottleRatio;} // = 0.9;
+	AP_Float getAcrtBoostAlphaFilter(){return acrtBoostAlphaFilter;} 
+	AP_Float getAcrtBoostK(){return acrtBoostK;} 
 
 private:
     // Put your parameter variable definitions here
@@ -26,6 +28,8 @@ private:
 	AP_Float acrtFactorRollPitch; // = 0.25;
 	AP_Int16 acrtDelay;
 	AP_Float acrtMinThrottleRatio;
+	AP_Float acrtBoostAlphaFilter;
+	AP_Float acrtBoostK;
 	
 	
 

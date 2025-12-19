@@ -44,6 +44,8 @@ void Copter::userhook_SuperFastLoop()
 	float angularSpeed = 0.0;
 	
 	uint64_t timerStart = AP_HAL::micros64();
+	uint64_t deltaT = timerStart - _lastTimeCalc;
+	_lastTimeCalc = timerStart;
 	if(g2.user_parameters.getAcrtDebug()  == 1){
 		if(calculationStartTimerActr == 0){
 			calculationStartTimerActr = AP_HAL::millis();
@@ -77,26 +79,19 @@ void Copter::userhook_SuperFastLoop()
 		
 		//On estime la poistion qu'aura le moteur lorsque l'on everra l'ordre
 		//En fonction des différents délais de traitement
-		
-		/*if(g2.user_parameters.getAcrtDelay() >= 0 && angularSpeed > 0){
-			uint32_t motorDecalageTimeUs = (AP_HAL::micros64() - telem_data.last_update_us) + g2.user_parameters.getAcrtDelay();
-			motorPosRads = motorPosReadRads + angularSpeed*motorDecalageTimeUs/1e6;
-		}else{
-			motorPosRads = motorPosReadRads;
+		if(g2.user_parameters.getAcrtDelay() >= 0 && angularSpeed > 0){
+			uint32_t motorDecalageTimeUs = (timerStart - telem_data.last_update_us) + g2.user_parameters.getAcrtDelay();
+			motorPosRads = motorPosReadRads + angularSpeed*motorDecalageTimeUs/TEN_POW_SIX;
 		}
-		
-		while(motorPosRads >= M_2PI){
-			motorPosRads -= M_2PI;
-		}*/
 		
 		/**************  Time Based Phase Shifter     ********************/
         // Calcule l'avance angulaire nécessaire pour compenser le temps de retard
-        float angularAdvance = angularSpeed * _tbpsTimeDelayUSeconds / pow(10,6);
+        float angularAdvance = angularSpeed * _tbpsTimeDelayUSeconds / TEN_POW_SIX;
         
         // Limite l'avance à 90° pour éviter les instabilités
         if (angularAdvance > M_PI_2) angularAdvance = M_PI_2;
 
-        motorPosRads = fmod(motorPosReadRads + angularAdvance, M_2PI);
+        motorPosRads = fmod(motorPosRads + angularAdvance, M_2PI);
 		/**************  FIN Time Based Phase Shifter     ********************/
 		
 		uint16_t motorPosTabIdx = -1;
@@ -225,9 +220,9 @@ void Copter::userhook_SuperFastLoop()
 	            _tbpsSpeedWasBelow = false;
 	            
 	            // Calcul du retard temporel constaté sur ce cycle
-	            float measuredDelayRad = fmod(angleAtCrossSpeed - _tbpsAngleAtCrossThrottle + M_2_PI, M_2_PI);
+	            float measuredDelayRad = fmod(angleAtCrossSpeed - _tbpsAngleAtCrossThrottle + M_2PI, M_2PI);
 	            if (angularSpeed > 0) {
-	                float measuredTimeDelayUS = (measuredDelayRad / angularSpeed) / pow(10,6) ;
+	                double measuredTimeDelayUS = (measuredDelayRad / angularSpeed) * TEN_POW_SIX ;
 	                
 	                // Mise à jour de la constante de temps (Lissage)
 	                _tbpsTimeDelayUSeconds = (_tbpsTimeDelayUSeconds * (1.0f - _tbpsLearningRate)) + (measuredTimeDelayUS * _tbpsLearningRate);
@@ -236,7 +231,40 @@ void Copter::userhook_SuperFastLoop()
 	            _tbpsSpeedWasBelow = true;
 	        }
 			/**************  Fin Time Based Phase Shifter     ********************/
+			//On boost en demande d'acceleration et on deboost en décélération
+			// BOOST PRÉDICTIF (Vertical / Dynamique)
+	        // On calcule la vitesse de variation de l'ordre
+			// CALCUL DE LA DÉRIVÉE FILTRÉE
+	        double instantDerivative = (thrustOscillant - lastRawThrottle) * TEN_POW_SIX / deltaT ;
+			if(instantDerivative == instantDerivative){ //Si NaN on ne passe pas dans le filtre
+				// Filtre passe-bas pour éviter les vibrations
+		        filteredDerivative = (g2.user_parameters.getAcrtBoostAlphaFilter() * instantDerivative) + ((1.0f - g2.user_parameters.getAcrtBoostAlphaFilter()) * filteredDerivative);
+		        lastRawThrottle = thrustOscillant;
+
+		        // 3. ADAPTATION DU BOOST AU RÉGIME
+		        // Le boost augmente proportionnellement aux RPM
+		        //float adaptiveKBoost = kBoostBase * (angularSpeed / refRPM);
+		        // Si l'effet aéro est très fort, utilisez le carré :
+		        double adaptiveKBoost =  pow(angularSpeed / refSpeedRadSec, 2);
+				double kBoost = kBoostBase;
+				if (filteredDerivative > 0) {
+			        // Gain plus fort pour l'accélération
+			        kBoost *= 1.5f; 
+			    } else {
+			        // Gain plus faible pour la décélération (l'air aide déjà)
+			        kBoost *=  0.8f;
+			    }
+
+		        thrustOscillant += (g2.user_parameters.getAcrtBoostK() * filteredDerivative * adaptiveKBoost);
+				
+				if(g2.user_parameters.getAcrtDebug() == 6){
+					gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR instdrv %f drv %f bst %f",
+														instantDerivative, filteredDerivative, adaptiveKBoost);
+
+				}
+			}
 			
+			thrustOscillant = MAX(0, MIN(1, thrustOscillant));
 			
 			if(g2.user_parameters.getAcrtDebug() == 4){
 				gcs().send_text(MAV_SEVERITY_DEBUG, "ACTR %f < cmdVal < %f %f < output < %f thr %f",
