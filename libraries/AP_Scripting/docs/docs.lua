@@ -3506,6 +3506,12 @@ function gps:num_sensors() end
 ---@param data string -- binary data to inject
 function gps:inject_data(data) end
 
+-- Returns the jamming index of GPS
+-- Posible return values are GSP dependant
+---@param instance integer -- instance number
+---@return number|nil -- jamming index
+function gps:jamming_index(instance) end
+
 -- Object that can be passed to a scripting battery monitor backend
 ---@class (exact) BattMonitorScript_State_ud
 local BattMonitorScript_State_ud = {}

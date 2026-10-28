@@ -1391,12 +1391,17 @@ AP_GPS_UBLOX::_parse_gps(void)
         switch(_msg_id) {
         case MSG_MON_HW:
             if (_payload_length == 60 || _payload_length == 68) {
-                log_mon_hw();
+				if (_payload_length == 68) {
+					state.jamInd    = _buffer.mon_hw_68.jamInd;
+				}else{
+					state.jamInd    = _buffer.mon_hw_60.jamInd;
+				}
+				log_mon_hw();
             }
             break;
         case MSG_MON_HW2:
             if (_payload_length == 28) {
-                log_mon_hw2();  
+                log_mon_hw2(); 
             }
             break;
 #if HAL_LOGGING_ENABLED && AP_GPS_UBLOX_CFGV2_ENABLED

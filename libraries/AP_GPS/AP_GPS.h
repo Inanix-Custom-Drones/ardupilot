@@ -241,6 +241,8 @@ public:
         float relPosD;                     ///< Reported Vertical distance in meters
         float accHeading;                  ///< Reported Heading Accuracy in degrees
         uint32_t relposheading_ts;        ///< True if new data has been received since last time it was false
+		
+		uint8_t jamInd; //Jamming index from UBlox
     };
 
     /// Startup initialisation.
@@ -469,6 +471,15 @@ public:
     bool have_vertical_velocity(void) const {
         return have_vertical_velocity(primary_instance);
     }
+	
+	uint8_t jamming_index(uint8_t instance) const {
+	    return state[instance].jamInd;
+	}
+	
+	uint8_t jamming_index() const {
+	    return jamming_index(primary_instance);
+	}
+	
 
     // return true if the GPS currently has yaw available
     bool have_gps_yaw(uint8_t instance) const {
